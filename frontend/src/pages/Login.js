@@ -6,7 +6,6 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useContext, useEffect, useState } from "react";
 import AuthContext from "../context/AuthContext";
-import { NavLink } from "react-router-dom";
 
 const EMAIL_REGEX = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(.\w{2,3})+$/;
 const PWD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%.]).{8,24}$/;
@@ -132,7 +131,7 @@ const Login = () => {
         <div className="col-md-8 offset-md-6">
           <span className="register-screen__subtext">
             Don't you have an account?{" "}
-            <NavLink to="/register/">Register</NavLink>
+            <a href="/register/">Register</a>
             &nbsp;&nbsp;&nbsp;
           </span>
           <button type="submit" className="btn btn-primary">

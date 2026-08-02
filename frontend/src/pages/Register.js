@@ -5,7 +5,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useContext, useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
 
 const USERNAME_REGEX = /^[a-zA-Z][a-zA-Z0-9-_]{3,23}$/;
@@ -249,7 +248,7 @@ const Register = () => {
           <span className="register-screen__subtext">
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Already have an
             account?&nbsp;&nbsp;
-            <NavLink to="/login/">Login</NavLink>&nbsp;&nbsp;
+            <a href="/login/">Login</a>&nbsp;&nbsp;
           </span>
           <button type="submit" className="btn btn-primary">
             Submit

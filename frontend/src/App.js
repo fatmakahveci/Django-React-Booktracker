@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Route, Routes } from "react-router-dom";
 import "./assets/css/App.css";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
@@ -12,20 +11,19 @@ import PageNotFound from "./utils/PageNotFound";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const path = window.location.pathname.replace(/\/$/, "") || "/";
+
+  let page = <PageNotFound />;
+  if (path === "/") page = <HomePage />;
+  if (!isLoggedIn && path === "/register") page = <Register />;
+  if (!isLoggedIn && path === "/login") page = <Login />;
+  if (isLoggedIn && path === "/books") page = <Book />;
 
   return (
     <div className="container">
       <AuthProvider>
         <Header setIsLoggedIn={setIsLoggedIn} />
-        <Routes>
-          <Route exact path="/" element={<HomePage />} />
-          {!isLoggedIn && (
-            <Route exact path="register" element={<Register />} />
-          )}
-          {!isLoggedIn && <Route exact path="login" element={<Login />} />}
-          {isLoggedIn && <Route exact path="books" element={<Book />} />}
-          <Route exact path="*" element={<PageNotFound />} />
-        </Routes>
+        {page}
         <Footer title="Footer" />
       </AuthProvider>
     </div>

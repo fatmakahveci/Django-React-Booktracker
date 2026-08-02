@@ -1,7 +1,6 @@
 import axios from "axios";
-import jwt_decode from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import { createContext, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 const AuthContext = createContext();
 
@@ -19,11 +18,11 @@ export const AuthProvider = ({ children }) => {
 
   const [user, setUser] = useState(
     localStorage.getItem("user")
-      ? jwt_decode(localStorage.getItem("user"))
+      ? jwtDecode(localStorage.getItem("user"))
       : null
   );
 
-  const navigate = useNavigate();
+  const navigate = (path) => window.location.assign(path);
 
   const [message, setMessage] = useState("");
   const [showMessage, setShowMessage] = useState(false);
@@ -62,7 +61,7 @@ export const AuthProvider = ({ children }) => {
       })
       .then((response) => {
         setAuthTokens(response.data);
-        setUser(jwt_decode(response.data.access));
+        setUser(jwtDecode(response.data.access));
         localStorage.setItem("authTokens", JSON.stringify(response.data));
         navigate("books/");
       })
