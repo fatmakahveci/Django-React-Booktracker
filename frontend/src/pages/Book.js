@@ -5,6 +5,11 @@ import { AddBook } from "../components/AddBook";
 import { Bookshelf } from "../components/Bookshelf";
 import AuthContext from "../context/AuthContext";
 
+export async function fetchFinishedList(config) {
+  const response = await axios.get("/finished/", config);
+  return response.data ?? response;
+}
+
 function Book() {
   let { authTokens } = useContext(AuthContext);
 
@@ -23,26 +28,18 @@ function Book() {
     [authTokens?.access]
   );
 
-  useEffect(async () => {
-    const unfinishedList = await axios
-      .get("/unfinished/", config)
-      .then((response) => {
-        return response.data;
-      })
-      .catch((err) => {
+  useEffect(() => {
+    async function loadBooks() {
+      try {
+        const unfinishedResponse = await axios.get("/unfinished/", config);
+        setUnfinishedList(unfinishedResponse.data);
+        setFinishedList(await fetchFinishedList(config));
+      } catch (err) {
         console.log(err);
-      });
-    setUnfinishedList(unfinishedList);
+      }
+    }
 
-    const finishedList = await axios
-      .get("/finished/", config)
-      .then((response) => {
-        return response.data;
-      })
-      .catch((err) => {
-        console.log(err);
-      });
-    setFinishedList(finishedList);
+    loadBooks();
   }, [config]);
 
   async function setFinished(book, finished) {
