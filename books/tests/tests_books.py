@@ -1,14 +1,9 @@
-import logging
 from books.models import Book
 from books.tests.base import BaseBookTest
 from rest_framework import status
 
 
 class BookAPITest(BaseBookTest):
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-
     def test_save_books_with_valid_credentials(self):
         """
         Save books if credentials are valid, return status code 200

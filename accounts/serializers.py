@@ -28,8 +28,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
         extra_kwargs = {"password": {"write_only": True}}
 
     def validate(self, attrs):
-        USER_NAME_PATTERN = "(\w[.-]?){4,24}$"
-        EMAIL_PATTERN = "\w+([.-]?\w+)*@\w+([.-]?\w+)*(.\w{2,3})+"
+        USER_NAME_PATTERN = r"(\w[.-]?){4,24}$"
+        EMAIL_PATTERN = r"\w+([.-]?\w+)*@\w+([.-]?\w+)*(.\w{2,3})+"
         PASSWORD_PATTERN = "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%.]).{8,24}$"
 
         user_name = attrs.get("user_name", "")
