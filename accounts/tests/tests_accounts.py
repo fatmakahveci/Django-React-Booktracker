@@ -4,10 +4,6 @@ from rest_framework import status
 
 
 class AccountAPITest(BaseAccountTest):
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-
     def test_get_token_url(self):
         """
         Get token url, return status code 200
