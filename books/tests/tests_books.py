@@ -21,9 +21,9 @@ class BookAPITest(BaseBookTest):
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_save_books_with_invalid_credentials_missing_user(self):
+    def test_save_books_without_client_supplied_owner(self):
         """
-        Do not save books if credentials are invalid, return status code 400
+        Assign the authenticated owner when the client omits the user field.
         """
         self.client.force_authenticate(user=self.user)
         response = self.client.post(
@@ -35,9 +35,10 @@ class BookAPITest(BaseBookTest):
                 "finished": self.finished,
             },
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['user'], self.user.id)
 
-    def test_save_books_with_invalid_credentials_missing_user(self):
+    def test_save_books_with_missing_title(self):
         """
         Do not save books if informations are invalid, return status code 400
         Here title is missing.
