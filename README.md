@@ -88,6 +88,14 @@ and [DRF's user-scoped queryset pattern](https://www.django-rest-framework.org/a
 
 ## Quality Checks
 
+Browser integration tests start the real Django API with a fresh temporary SQLite
+database. They cover registration, login, book creation, token rotation (including
+rejection of the old refresh token), persistence after reload, and logout.
+Install the Python requirements and run `npx playwright install chromium`, then
+`npx playwright test` from `frontend/`. No production database or secret is used.
+Set `VITE_API_URL` at build time to configure a deployment's API URL; it defaults
+to the local Django server. Refresh tokens are persisted after rotation.
+
 ```bash
 python manage.py check
 python manage.py test

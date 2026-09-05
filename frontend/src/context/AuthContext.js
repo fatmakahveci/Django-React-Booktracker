@@ -1,26 +1,20 @@
-import axios from "axios";
+import { publicApi as axios, readTokens, clearTokens } from "../api";
 import { jwtDecode } from "jwt-decode";
 import { createContext, useState } from "react";
 
 const AuthContext = createContext();
 
-axios.defaults.baseURL = "http://localhost:8000/";
 axios.defaults.headers.post["Content-Type"] = "application/json";
 axios.defaults.xsrfCookieName = "csrftoken";
 axios.defaults.xsrfHeaderName = "X-CSRFTOKEN";
 
 export const AuthProvider = ({ children }) => {
-  const [authTokens, setAuthTokens] = useState(
-    localStorage.getItem("authTokens")
-      ? JSON.parse(localStorage.getItem("authTokens"))
-      : null
-  );
+  const [authTokens, setAuthTokens] = useState(readTokens);
 
-  const [user, setUser] = useState(
-    localStorage.getItem("user")
-      ? jwtDecode(localStorage.getItem("user"))
-      : null
-  );
+  const [user, setUser] = useState(() => {
+    try { return authTokens ? jwtDecode(authTokens.access) : null; }
+    catch { clearTokens(); return null; }
+  });
 
   const navigate = (path) => window.location.assign(path);
 
@@ -40,7 +34,7 @@ export const AuthProvider = ({ children }) => {
         if (response.status >= 200 && response.status < 300) {
           setMessage("The user is successfully registered.");
           setShowMessage(false);
-          navigate("login/");
+          navigate("/login/");
         }
       })
       .catch((err) => {
@@ -63,17 +57,18 @@ export const AuthProvider = ({ children }) => {
         setAuthTokens(response.data);
         setUser(jwtDecode(response.data.access));
         localStorage.setItem("authTokens", JSON.stringify(response.data));
-        navigate("books/");
+        navigate("/books/");
       })
       .catch((err) => {
         console.log(err);
       });
   };
 
-  const logoutUser = () => {
+  const logoutUser = (event) => {
+    event?.preventDefault();
     setAuthTokens(null);
     setUser(null);
-    localStorage.removeItem("authTokens");
+    clearTokens();
     navigate("/");
   };
 
