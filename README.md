@@ -38,17 +38,53 @@ A full-stack reading tracker with a Django REST API, JWT authentication, and a V
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install Django djangorestframework djangorestframework-simplejwt django-cors-headers
+python -m pip install -r requirements.txt
+export DJANGO_DEBUG=true
+export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+# Use a new local database; the historical tracked database is left untouched.
+export DJANGO_DB_PATH="$PWD/local.sqlite3"
 python manage.py migrate
 python manage.py runserver
 
 # In a second terminal
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
 The API runs on http://127.0.0.1:8000 and the Vite client reports its local URL in the terminal.
+
+### Security and deployment
+
+Debug mode is off by default. Set a unique `DJANGO_SECRET_KEY` (at least 50 random
+characters) through your deployment's secret store, and set `DJANGO_ALLOWED_HOSTS`
+to a comma-separated list of your hostnames. Set `DJANGO_CORS_ALLOWED_ORIGINS` and
+`DJANGO_CSRF_TRUSTED_ORIGINS` to explicit HTTPS origins where needed; production
+defaults allow no cross-origin clients. Development CORS permits Vite on port 5173.
+Environment variables are read directly; `.env` files are not loaded automatically.
+
+Production enables HTTPS redirects, secure session/CSRF cookies, and one-year HSTS.
+Configure TLS and a trusted reverse proxy before deploying. Do not blindly trust
+forwarded headers from clients. Run `python manage.py check --deploy` with your
+actual deployment configuration.
+Only enable `DJANGO_HSTS_INCLUDE_SUBDOMAINS=true` when every subdomain supports
+HTTPS, and `DJANGO_HSTS_PRELOAD=true` when your domain meets preload requirements.
+The deployment checker intentionally warns until those deployment-specific choices
+are made; CI checks an HTTPS-only example configuration.
+
+The old committed development signing key must never be reused. If it was used
+in a deployment, rotate that deployment's secret and invalidate existing sessions
+and JWTs. No production secret rotation or database migration is performed by CI.
+Back up existing databases and reconcile their migration history before adopting
+the initial migrations; do not blindly apply `--fake` or overwrite existing data.
+
+Books are scoped to the authenticated user for list, detail, update, and delete.
+The server assigns ownership; client-provided `user` fields are read-only.
+JWT refresh tokens expire after seven days and are blacklisted after rotation.
+Clients must store the newly returned refresh token after each refresh.
+
+These defaults follow the [Django deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)
+and [DRF's user-scoped queryset pattern](https://www.django-rest-framework.org/api-guide/generic-views/#get_querysetself).
 
 ## Quality Checks
 
