@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from "../api";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { Col, Container, Row } from "react-bootstrap";
 import { AddBook } from "../components/AddBook";
@@ -6,7 +6,7 @@ import { Bookshelf } from "../components/Bookshelf";
 import AuthContext from "../context/AuthContext";
 
 export async function fetchFinishedList(config) {
-  const response = await axios.get("/finished/", config);
+  const response = await axios.get("/books/finished/", config);
   return response.data ?? response;
 }
 
@@ -16,7 +16,6 @@ function Book() {
   const [unfinishedList, setUnfinishedList] = useState([]);
   const [finishedList, setFinishedList] = useState([]);
 
-  axios.defaults.baseURL = "http://localhost:8000/books";
 
   const config = useMemo(
     () => ({
@@ -31,7 +30,7 @@ function Book() {
   useEffect(() => {
     async function loadBooks() {
       try {
-        const unfinishedResponse = await axios.get("/unfinished/", config);
+        const unfinishedResponse = await axios.get("/books/unfinished/", config);
         setUnfinishedList(unfinishedResponse.data);
         setFinishedList(await fetchFinishedList(config));
       } catch (err) {
@@ -44,7 +43,7 @@ function Book() {
 
   async function setFinished(book, finished) {
     await axios
-      .patch(`/${book.id}/`, { finished: finished }, config)
+      .patch(`/books/${book.id}/`, { finished: finished }, config)
       .then((response) => {
         return response;
       })
@@ -54,12 +53,12 @@ function Book() {
   }
 
   async function deleteBook(book) {
-    await axios.delete(`${book.id}/`, config);
+    await axios.delete(`/books/${book.id}/`, config);
   }
 
   const handleAddBook = async (book) => {
     let savedBook = await axios
-      .post("/", book, config)
+      .post("/books/", book, config)
       .then((response) => {
         return response.data;
       })
