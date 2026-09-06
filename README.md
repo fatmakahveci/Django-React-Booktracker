@@ -29,9 +29,14 @@ A full-stack reading tracker with a Django REST API, JWT authentication, and a V
 
 ### Prerequisites
 
-- Python 3.11 or newer
+- Python 3.12, 3.13, or 3.14 (Django 6.1 does not support Python 3.11)
 - Node.js 20 or newer
 - pip and npm
+
+When upgrading an existing checkout, recreate the virtual environment with a
+supported Python version before reinstalling `requirements.txt`. Back up your
+SQLite database before running migrations. Backend CI verifies Python 3.12–3.14;
+browser integration tests use Python 3.13.
 
 ### Installation
 
@@ -83,7 +88,7 @@ The server assigns ownership; client-provided `user` fields are read-only.
 JWT refresh tokens expire after seven days and are blacklisted after rotation.
 Clients must store the newly returned refresh token after each refresh.
 
-These defaults follow the [Django deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)
+These defaults follow the [Django deployment checklist](https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/)
 and [DRF's user-scoped queryset pattern](https://www.django-rest-framework.org/api-guide/generic-views/#get_querysetself).
 
 ## Quality Checks
