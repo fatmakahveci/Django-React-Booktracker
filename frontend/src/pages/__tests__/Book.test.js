@@ -1,7 +1,9 @@
-import axios from "axios";
+import axios from "../../api";
 import { fetchFinishedList } from "../Book";
 
-vi.mock("axios");
+vi.mock("../../api", async (importOriginal) => ({
+  ...await importOriginal(), default: { get: vi.fn() },
+}));
 
 const contextValues = {
   user: "",
