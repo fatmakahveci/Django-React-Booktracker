@@ -8,8 +8,14 @@ where applicable.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded Django to 6.1.1 and aligned the documented Python requirement with 3.12–3.14.
+- Validate backend checks, migrations, deployment settings, and tests on all three supported Python versions.
+
 ### Added
 
+- Regression coverage for pre-upgrade password hashes and custom-user admin pages.
 - Added an initial changelog to track future project changes.
 
 <!--
