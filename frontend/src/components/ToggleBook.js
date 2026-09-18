@@ -3,7 +3,7 @@ import "../assets/css/App.css";
 
 export default function Book(props) {
   const { book } = props;
-  const toogleButtonText = book.finished ? "Unfinish" : "Finish";
+  const toggleButtonText = book.finished ? "Unfinish" : "Finish";
   return (
     <div className="row">
       <Row>
@@ -31,16 +31,20 @@ export default function Book(props) {
         </Col>
       </Row>
       <Row className="mt-3">
-        <Col lg={6} sm={12} className="p-1 d-grid">
+        <Col lg={4} sm={12} className="p-1 d-grid">
+          <Button variant="outline-primary" disabled={props.busy} onClick={() => props.handleEditBook(book)}>Edit</Button>
+        </Col>
+        <Col lg={4} sm={12} className="p-1 d-grid">
           <Button
             variant="primary"
+            disabled={props.busy}
             onClick={() => props.handleToggleBook(book)}
           >
-            {toogleButtonText}
+            {toggleButtonText}
           </Button>
         </Col>
-        <Col lg={6} sm={12} className="p-1 d-grid">
-          <Button variant="danger" onClick={() => props.handleDeleteBook(book)}>
+        <Col lg={4} sm={12} className="p-1 d-grid">
+          <Button disabled={props.busy} variant="danger" onClick={() => props.handleDeleteBook(book)}>
             Delete
           </Button>
         </Col>
