@@ -6,7 +6,6 @@ export function Bookshelf(props) {
   const bookshelfName = props.finished ? "Finished Books" : "Unfinished Books";
 
   let { bookList } = props;
-  console.log(bookList);
   bookList = bookList ? bookList : [];
 
   return (
@@ -23,6 +22,8 @@ export function Bookshelf(props) {
                       book={book}
                       handleToggleBook={props.handleToggleBook}
                       handleDeleteBook={props.handleDeleteBook}
+                      handleEditBook={props.handleEditBook}
+                      busy={props.busy}
                     />
                   </td>
                 </tr>
