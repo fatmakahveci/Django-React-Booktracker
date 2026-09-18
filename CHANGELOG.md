@@ -15,8 +15,17 @@ where applicable.
 
 ### Added
 
+- Edit book titles, authors, and publication years from either reading shelf.
+- Show actionable book-operation errors and retry failed shelf loading.
+- Cover editing, cancellation, persistence, and failed operations with browser tests.
+
 - Regression coverage for pre-upgrade password hashes and custom-user admin pages.
 - Added an initial changelog to track future project changes.
+
+### Fixed
+
+- Preserve form input after failed saves and update shelves only after successful API requests.
+- Prevent overlapping book mutations while a request is pending.
 
 <!--
 When preparing a release, move relevant entries from Unreleased into a dated
