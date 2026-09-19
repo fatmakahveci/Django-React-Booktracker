@@ -32,7 +32,7 @@ Captured from the local application with sample data: add a book, move it to the
 | Backend | Python, Django, Django REST Framework |
 | Authentication | Simple JWT with refresh-token rotation and blacklisting |
 | Database | SQLite |
-| Frontend | React 18, JavaScript, Vite, Axios |
+| Frontend | React 19, JavaScript, Vite, Axios |
 | Interface | Bootstrap, React Bootstrap, Font Awesome |
 | Testing | Django test runner, Vitest, Playwright |
 | CI | GitHub Actions |
@@ -41,7 +41,7 @@ Backend versions are pinned in [requirements.txt](requirements.txt). Frontend de
 
 ## Local setup
 
-The commands below use a macOS/Linux shell. Use Python 3.12, 3.13, or 3.14, and a recent Node.js 22 release with npm. CI tests the backend on all three Python versions and the frontend on Node.js 22.
+The commands below use a macOS/Linux shell. Use Python 3.12, 3.13, or 3.14, and Node.js 22.22.2+, 24.15.0+, or 26+ with npm. CI tests the backend on all three Python versions and the frontend on Node.js 22, 24, and 26. Node.js 20 is no longer supported by the test tooling.
 
 ### 1. Clone the repository
 
