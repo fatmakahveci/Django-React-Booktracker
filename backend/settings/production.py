@@ -12,3 +12,13 @@ for required in ("DATABASE_URL", "REDIS_URL", "DJANGO_PUBLIC_URL", "DJANGO_ALLOW
         raise ImproperlyConfigured(f"Production requires {required}.")
 if not os.environ["DJANGO_PUBLIC_URL"].startswith("https://"):
     raise ImproperlyConfigured("Production DJANGO_PUBLIC_URL must use HTTPS.")
+
+if EMAIL_BACKEND in {  # noqa: F405
+    "django.core.mail.backends.console.EmailBackend",
+    "django.core.mail.backends.filebased.EmailBackend",
+    "django.core.mail.backends.locmem.EmailBackend",
+    "django.core.mail.backends.dummy.EmailBackend",
+}:
+    raise ImproperlyConfigured(
+        "Production requires a real email backend; development backends can expose reset links or discard mail."
+    )

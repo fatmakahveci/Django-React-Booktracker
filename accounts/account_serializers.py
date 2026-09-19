@@ -2,7 +2,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 
+from .authentication import locked_authenticated_user
 from .models import CustomUser
+from .validators import validate_user_name
 
 
 def check_password(value, user=None):
@@ -18,12 +20,19 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ("id", "email", "user_name", "email_verified", "date_joined")
         read_only_fields = ("id", "email", "email_verified", "date_joined")
+        extra_kwargs = {"user_name": {"min_length": 4, "max_length": 24}}
 
     def validate_user_name(self, value):
-        value = value.strip()
-        if len(value) < 4:
-            raise serializers.ValidationError("Use at least four characters.")
+        validate_user_name(value)
         return value
+
+    def update(self, instance, validated_data):
+        with locked_authenticated_user(self.context["request"]) as user:
+            if "user_name" in validated_data:
+                user.user_name = validated_data["user_name"]
+                # Never write stale password, permission or revocation fields from the profile.
+                user.save(update_fields=["user_name"])
+            return user
 
 
 class EmailSerializer(serializers.Serializer):

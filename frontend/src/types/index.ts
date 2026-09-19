@@ -18,8 +18,8 @@ export interface Book {
   rating: number | null;
   started_on: string | null;
   finished_on: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 export type BookInput = Omit<Book, "id" | "user" | "created_at" | "updated_at">;
 export interface Page<T> {

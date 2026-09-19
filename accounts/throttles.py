@@ -62,6 +62,10 @@ class LoginThrottle(ClientIPThrottle):
     scope = "login"
 
 
+class RefreshThrottle(ClientIPThrottle):
+    scope = "refresh"
+
+
 class RegistrationThrottle(ClientIPThrottle):
     scope = "registration"
 

@@ -10,6 +10,12 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 
+def checksum(path):
+    # Stream backups so database size does not determine the process's memory usage.
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
 def connection_env():
     url = urlparse(os.environ["DATABASE_URL"])
     if url.scheme not in ("postgres", "postgresql"):
@@ -46,12 +52,11 @@ def main():
                 stdout=output,
                 check=True,
             )
-        checksum = hashlib.sha256(args.file.read_bytes()).hexdigest()
         checksum_path = Path(str(args.file) + ".sha256")
         with os.fdopen(
             os.open(checksum_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w"
         ) as output:
-            output.write(checksum + "\n")
+            output.write(checksum(args.file) + "\n")
         print("Backup and SHA-256 checksum created. Store both in encrypted off-host storage.")
     else:
         if not re.fullmatch(r"[a-z][a-z0-9_]{2,62}", args.new_database):
@@ -60,10 +65,7 @@ def main():
             )
         if args.new_database == env["PGDATABASE"]:
             raise SystemExit("Refusing to restore over the source database.")
-        if (
-            hashlib.sha256(args.file.read_bytes()).hexdigest()
-            != Path(str(args.file) + ".sha256").read_text().strip()
-        ):
+        if checksum(args.file) != Path(str(args.file) + ".sha256").read_text().strip():
             raise SystemExit("Backup checksum mismatch.")
         subprocess.run(["createdb", args.new_database], env=env, check=True)
         env["PGDATABASE"] = args.new_database

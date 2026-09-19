@@ -2,12 +2,16 @@ import { useState, type FormEvent } from "react";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import type { User } from "../types";
+type AccountAction = "me" | "password/change" | "sessions/revoke" | "account";
 export function AccountPage() {
   const { user, setUser } = useAuth();
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent<HTMLFormElement>, action: string) {
+  async function submit(
+    event: FormEvent<HTMLFormElement>,
+    action: AccountAction,
+  ) {
     event.preventDefault();
     const form = event.currentTarget;
     const body = Object.fromEntries(new FormData(form));
@@ -26,7 +30,7 @@ export function AccountPage() {
         );
         setUser(null);
       }
-      form.reset();
+      if (action !== "me") form.reset();
     } catch (e) {
       setError(errorMessage(e));
     } finally {

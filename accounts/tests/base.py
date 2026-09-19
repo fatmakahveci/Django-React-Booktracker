@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 class BaseAccountTest(TestCase):
     def setUp(self) -> None:
         logger = logging.getLogger("django.request")
-        logger.getEffectiveLevel()
+        self.addCleanup(logger.setLevel, logger.level)
         logger.setLevel(logging.ERROR)
 
         self.user_name = "user"
