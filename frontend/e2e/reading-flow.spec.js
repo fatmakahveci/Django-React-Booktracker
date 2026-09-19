@@ -38,9 +38,13 @@ test("register, login, create a book, rotate tokens, reload and logout", async (
   expect(newRefresh).not.toBe(oldRefresh);
   const rejected = await request.post("http://127.0.0.1:8191/token/refresh/", { data: { refresh: oldRefresh } });
   expect(rejected.status()).toBe(401);
+  const logoutResponse = page.waitForResponse((r) => r.url().endsWith("/logout/") && r.status() === 200);
   await page.getByRole("link", { name: "Logout" }).click();
+  await logoutResponse;
   await expect(page).toHaveURL("http://127.0.0.1:5191/");
   expect(await page.evaluate(() => localStorage.getItem("authTokens"))).toBeNull();
+  const loggedOutRefresh = await request.post("http://127.0.0.1:8191/token/refresh/", { data: { refresh: newRefresh } });
+  expect(loggedOutRefresh.status()).toBe(401);
   await page.goto("/books/");
   await expect(page.locator('[name="title"]')).toHaveCount(0);
 });
