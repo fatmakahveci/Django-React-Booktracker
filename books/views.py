@@ -1,4 +1,4 @@
-from django.db.models import F
+from django.db.models import Count, F, Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
@@ -78,11 +78,8 @@ class BookViewSet(viewsets.ModelViewSet):
     @extend_schema(responses=SummarySerializer, parameters=[])
     @action(detail=False, pagination_class=None, filter_backends=[])
     def summary(self, request):
-        books = Book.objects.filter(user=request.user)
-        return Response(
-            {
-                "total": books.count(),
-                "finished": books.filter(finished=True).count(),
-                "unfinished": books.filter(finished=False).count(),
-            }
+        counts = Book.objects.filter(user=request.user).aggregate(
+            total=Count("pk"), finished=Count("pk", filter=Q(finished=True))
         )
+        # Use one database snapshot so concurrent edits cannot produce conflicting counts.
+        return Response({**counts, "unfinished": counts["total"] - counts["finished"]})

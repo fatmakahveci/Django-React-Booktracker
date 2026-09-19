@@ -1,29 +1,307 @@
-import { test, expect, type Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-const password = 'A-reading-room-42!';
+import { test, expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+const password = "A-reading-room-42!";
+async function seedBooks(page: Page, count: number) {
+  await page.evaluate(async (count) => {
+    const csrf = await (await fetch("/api/auth/csrf/")).json();
+    for (let i = 0; i < count; i++) {
+      const response = await fetch("/api/books/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrf.csrfToken,
+        },
+        body: JSON.stringify({
+          title: `Volume ${String(i).padStart(2, "0")}`,
+          author: "Test author",
+          year: 2026,
+        }),
+      });
+      if (!response.ok)
+        throw new Error(`Could not seed book: ${response.status}`);
+    }
+  }, count);
+}
 function emailLink(email: string, route: string) {
   const dir = process.env.E2E_MAIL_DIR!;
-  for (const file of readdirSync(dir)) { const content = readFileSync(join(dir,file),'utf8').replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/g,(_,hex)=>String.fromCharCode(parseInt(hex,16))); if (content.includes(`To: ${email}`) && content.includes(`/${route}?`)) return content.match(new RegExp(`http://[^\\s]+/${route}\\?[^\\s]+`))![0]; }
-  throw new Error('Email not delivered');
+  for (const file of readdirSync(dir)) {
+    const content = readFileSync(join(dir, file), "utf8")
+      .replace(/=\r?\n/g, "")
+      .replace(/=([0-9A-F]{2})/g, (_, hex) =>
+        String.fromCharCode(parseInt(hex, 16)),
+      );
+    if (content.includes(`To: ${email}`) && content.includes(`/${route}?`))
+      return content.match(new RegExp(`http://[^\\s]+/${route}\\?[^\\s]+`))![0];
+  }
+  throw new Error("Email not delivered");
 }
 async function register(page: Page) {
-  const name = `reader_${Date.now().toString(36)}`; const email = `${name}@example.com`;
-  await page.goto('/register'); await page.getByLabel('Username', {exact:true}).fill(name); await page.getByLabel('Email address').fill(email); await page.getByLabel('Password', {exact:true}).fill(password); await page.getByRole('button',{name:'Create account',exact:true}).click(); await expect(page.getByText('Check your email to verify your account.')).toBeVisible();
-  await page.goto(emailLink(email,'verify-email')); await page.getByRole('button',{name:'Verify email',exact:true}).click(); await expect(page.getByText('Email verified. You can now sign in.')).toBeVisible();
-  await page.goto('/login'); await page.getByLabel('Email address').fill(email); await page.getByLabel('Password',{exact:true}).fill(password); await page.getByRole('button',{name:'Sign in',exact:true}).click(); await expect(page.getByRole('heading',{name:'Your library.'})).toBeVisible(); return email;
+  const name = `reader_${Date.now().toString(36)}`;
+  const email = `${name}@example.com`;
+  await page.goto("/register");
+  await page.getByLabel("Username", { exact: true }).fill(name);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page
+    .getByRole("button", { name: "Create account", exact: true })
+    .click();
+  await expect(
+    page.getByText("Check your email to verify your account."),
+  ).toBeVisible();
+  await page.goto(emailLink(email, "verify-email"));
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await expect(
+    page.getByText("Email verified. You can now sign in."),
+  ).toBeVisible();
+  await page.goto("/login");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your library." }),
+  ).toBeVisible();
+  return email;
 }
-async function add(page: Page, title='The Dispossessed') { await page.getByRole('button',{name:'Add a book',exact:true}).click(); const form = page.getByRole('dialog'); await form.getByLabel('Title',{exact:true}).fill(title); await form.getByLabel('Author',{exact:true}).fill('Ursula K. Le Guin'); await form.getByLabel('Publication year').fill('1974'); await form.getByLabel('ISBN').fill('9780061054884'); await form.getByLabel('Reading notes').fill('A story about belonging and possibility.'); await form.getByRole('button',{name:'Add book',exact:true}).click(); await expect(form).not.toBeVisible(); await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible(); }
+async function add(page: Page, title = "The Dispossessed") {
+  await page.getByRole("button", { name: "Add a book", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form.getByLabel("Title", { exact: true }).fill(title);
+  await form.getByLabel("Author", { exact: true }).fill("Ursula K. Le Guin");
+  await form.getByLabel("Publication year").fill("1974");
+  await form.getByLabel("ISBN").fill("9780061054884");
+  await form
+    .getByLabel("Reading notes")
+    .fill("A story about belonging and possibility.");
+  await form.getByRole("button", { name: "Add book", exact: true }).click();
+  await expect(form).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
+}
 
-test('verified registration, private cookie session, CRUD and reload', async ({page, context}) => {
-  await register(page); const cookies = await context.cookies(); expect(cookies.find(c=>c.name==='bt_access')?.httpOnly).toBe(true); expect(await page.evaluate(()=>Object.keys(localStorage))).toEqual([]); await add(page);
-  await page.getByRole('button',{name:'Edit The Dispossessed',exact:true}).click(); await page.getByRole('dialog').getByLabel('Rating',{exact:true}).selectOption('5'); await page.getByRole('button',{name:'Save changes'}).click(); await expect(page.getByLabel('Rated 5 out of 5')).toBeVisible();
-  await page.getByRole('button',{name:'Mark finished',exact:true}).click(); await page.getByRole('button',{name:'Finished',exact:true}).click(); await expect(page.getByRole('heading',{name:'The Dispossessed',exact:true})).toBeVisible(); await page.reload(); await expect(page.getByRole('heading',{name:'The Dispossessed',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Remove The Dispossessed',exact:true}).click(); await page.getByRole('button',{name:'Remove book',exact:true}).click(); await expect(page.getByRole('heading',{name:'The Dispossessed',exact:true})).not.toBeVisible(); await page.getByRole('button',{name:'Sign out',exact:true}).click(); await expect(page.getByRole('heading',{name:'Welcome back.'})).toBeVisible();
+test("verified registration, private cookie session, CRUD and reload", async ({
+  page,
+  context,
+}) => {
+  await register(page);
+  const cookies = await context.cookies();
+  expect(cookies.find((c) => c.name === "bt_access")?.httpOnly).toBe(true);
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+  await add(page);
+  await page
+    .getByRole("button", { name: "Edit The Dispossessed", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Rating", { exact: true })
+    .selectOption("5");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByLabel("Rated 5 out of 5")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Mark finished", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Finished", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "The Dispossessed", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "The Dispossessed", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Remove The Dispossessed", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "The Dispossessed", exact: true }),
+  ).not.toBeVisible();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back." }),
+  ).toBeVisible();
 });
-test('failed edit preserves draft and supports retry',async ({page})=> { await register(page); await add(page); await page.getByRole('button',{name:'Edit The Dispossessed',exact:true}).click(); await page.getByRole('dialog').getByLabel('Title',{exact:true}).fill('A revised title'); await page.route('**/api/books/*/',route=>route.request().method()==='PATCH' ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:'Temporary test failure'})}) : route.continue()); await page.getByRole('button',{name:'Save changes'}).click(); await expect(page.getByRole('alert')).toContainText('Temporary test failure'); await expect(page.getByRole('dialog').getByLabel('Title',{exact:true})).toHaveValue('A revised title'); await page.unroute('**/api/books/*/'); await page.getByRole('button',{name:'Save changes'}).click(); await expect(page.getByRole('heading',{name:'A revised title'})).toBeVisible(); });
-test('search, URL state and server pagination',async ({page})=>{ await register(page); const token = await page.evaluate(async()=> (await (await fetch('/api/auth/csrf/')).json()).csrfToken); await page.evaluate(async token=>{ for(let i=0;i<14;i++) await fetch('/api/books/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':token},body:JSON.stringify({title:`Volume ${String(i).padStart(2,'0')}`,author:'Test author',year:2026})}); },token); await page.reload(); await expect(page.getByRole('article')).toHaveCount(12); await page.getByRole('button',{name:'Next',exact:true}).click(); await expect(page.getByRole('article')).toHaveCount(2); await expect(page).toHaveURL(/page=2/); await page.getByRole('searchbox',{name:'Search books'}).fill('Volume 03'); await expect(page.getByRole('article')).toHaveCount(1); await expect(page.getByRole('heading',{name:'Volume 03',exact:true})).toBeVisible(); });
-test('password reset email and account profile', async({page})=>{ const email=await register(page); await page.getByRole('link',{name:'Account',exact:true}).click(); await page.getByLabel('Username',{exact:true}).fill('updated_'+Date.now().toString(36)); await page.getByRole('button',{name:'Save profile'}).click(); await expect(page.getByRole('status')).toContainText('Profile updated'); await page.getByRole('button',{name:'Sign out',exact:true}).click(); await page.goto('/forgot-password'); await page.getByLabel('Email address').fill(email); await page.getByRole('button',{name:'Send email',exact:true}).click(); await expect(page.getByText('If the account exists, a reset link has been sent.')).toBeVisible(); await page.goto(emailLink(email,'reset-password')); await page.getByLabel('New password').fill('A-fresh-library-73!'); await page.getByRole('button',{name:'Save new password',exact:true}).click(); await expect(page.getByText('Password reset. Sign in with your new password.')).toBeVisible(); await page.goto('/login'); await page.getByLabel('Email address').fill(email); await page.getByLabel('Password',{exact:true}).fill('A-fresh-library-73!'); await page.getByRole('button',{name:'Sign in',exact:true}).click(); await expect(page.getByRole('heading',{name:'Your library.'})).toBeVisible(); });
-test('keyboard, dialog, mobile layout and axe accessibility',async({page})=>{ await page.goto('/'); expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()).violations).toEqual([]); await register(page); await add(page); expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()).violations).toEqual([]); await page.getByRole('button',{name:'Add a book',exact:true}).click(); await expect(page.getByRole('dialog').getByLabel('Title',{exact:true})).toBeFocused(); expect((await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()).violations).toEqual([]); await page.keyboard.press('Escape'); await expect(page.getByRole('dialog')).not.toBeVisible(); await expect(page.getByRole('button',{name:'Add a book',exact:true})).toBeFocused(); expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true); });
-test('expired access cookie renews without exposing tokens',async({page,context})=>{ await register(page); await add(page); const refresh=(await context.cookies()).find(c=>c.name==='bt_refresh')!.value; await context.clearCookies({name:'bt_access'}); await page.reload(); await expect(page.getByRole('heading',{name:'The Dispossessed',exact:true})).toBeVisible(); expect((await context.cookies()).find(c=>c.name==='bt_refresh')!.value).not.toBe(refresh); expect(await page.evaluate(()=>document.cookie)).not.toContain('bt_'); });
+test("failed edit preserves draft and supports retry", async ({ page }) => {
+  await register(page);
+  await add(page);
+  await page
+    .getByRole("button", { name: "Edit The Dispossessed", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Title", { exact: true })
+    .fill("A revised title");
+  await page.route("**/api/books/*/", (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Temporary test failure" }),
+        })
+      : route.continue(),
+  );
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert")).toContainText("Temporary test failure");
+  await expect(
+    page.getByRole("dialog").getByLabel("Title", { exact: true }),
+  ).toHaveValue("A revised title");
+  await page.unroute("**/api/books/*/");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("heading", { name: "A revised title" }),
+  ).toBeVisible();
+});
+test("search, URL state and server pagination", async ({ page }) => {
+  await register(page);
+  await seedBooks(page, 14);
+  await page.reload();
+  await expect(page.getByRole("article")).toHaveCount(12);
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect(page).toHaveURL(/page=2/);
+  await page.getByRole("searchbox", { name: "Search books" }).fill("Volume 03");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { name: "Volume 03", exact: true }),
+  ).toBeVisible();
+});
+test("password reset email and account profile", async ({ page }) => {
+  const email = await register(page);
+  await page.getByRole("link", { name: "Account", exact: true }).click();
+  const userName = "updated_" + Date.now().toString(36);
+  await page.getByLabel("Username", { exact: true }).fill(userName);
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page.getByRole("status")).toContainText("Profile updated");
+  await expect(page.getByLabel("Username", { exact: true })).toHaveValue(
+    userName,
+  );
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.goto("/forgot-password");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByRole("button", { name: "Send email", exact: true }).click();
+  await expect(
+    page.getByText("If the account exists, a reset link has been sent."),
+  ).toBeVisible();
+  await page.goto(emailLink(email, "reset-password"));
+  await page.getByLabel("New password").fill("A-fresh-library-73!");
+  await page
+    .getByRole("button", { name: "Save new password", exact: true })
+    .click();
+  await expect(
+    page.getByText("Password reset. Sign in with your new password."),
+  ).toBeVisible();
+  await page.goto("/login");
+  await page.getByLabel("Email address").fill(email);
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("A-fresh-library-73!");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your library." }),
+  ).toBeVisible();
+});
+test("keyboard, dialog, mobile layout and axe accessibility", async ({
+  page,
+}) => {
+  await page.goto("/");
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await register(page);
+  await add(page);
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.getByRole("button", { name: "Add a book", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByLabel("Title", { exact: true }),
+  ).toBeFocused();
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add a book", exact: true }),
+  ).toBeFocused();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+test("expired access cookie renews without exposing tokens", async ({
+  page,
+  context,
+}) => {
+  await register(page);
+  await add(page);
+  const refresh = (await context.cookies()).find(
+    (c) => c.name === "bt_refresh",
+  )!.value;
+  await context.clearCookies({ name: "bt_access" });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "The Dispossessed", exact: true }),
+  ).toBeVisible();
+  expect(
+    (await context.cookies()).find((c) => c.name === "bt_refresh")!.value,
+  ).not.toBe(refresh);
+  expect(await page.evaluate(() => document.cookie)).not.toContain("bt_");
+});
+
+test("moving the last book off a filtered page recovers pagination", async ({
+  page,
+}) => {
+  await register(page);
+  await seedBooks(page, 13);
+  await page.goto("/library?finished=false&page=2");
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "Mark finished", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/library\?finished=false$/);
+  await expect(page.getByRole("article")).toHaveCount(12);
+  await expect(page.getByRole("alert")).not.toBeVisible();
+  await page.goto("/library?finished=false&page=999");
+  await expect(page.getByRole("article")).toHaveCount(12);
+  await expect(page).toHaveURL(/\/library\?finished=false$/);
+});
+
+test("successful login clears a previous session lookup failure", async ({
+  page,
+}) => {
+  const email = await register(page);
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.route("**/api/auth/me/", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Temporary lookup failure" }),
+    }),
+  );
+  const lookup = page.waitForResponse("**/api/auth/me/");
+  await page.goto("/login");
+  await lookup;
+  await page.unroute("**/api/auth/me/");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your library." }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).not.toBeVisible();
+});

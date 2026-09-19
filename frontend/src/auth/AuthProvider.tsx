@@ -32,8 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setUser(await api<User>("auth/me/"));
     } catch (e) {
-      if (!(e instanceof ApiError && [400, 401, 403].includes(e.status)))
-        setError(errorMessage(e));
+      if (e instanceof ApiError && [400, 401, 403].includes(e.status))
+        setUser(null);
+      else setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       { email, password },
       false,
     );
+    setError("");
     setUser(result.user);
   };
   const signOut = async () => {
