@@ -18,6 +18,7 @@ def env_list(name, default=""):
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1" if DEBUG else "")
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173" if DEBUG else "")
+CORS_EXPOSE_HEADERS = ["Retry-After"]
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
@@ -73,6 +74,12 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REST_FRAMEWORK = {
+    # Use the socket peer address, never an untrusted X-Forwarded-For header.
+    "NUM_PROXIES": 0,
+    "DEFAULT_THROTTLE_RATES": {
+        "login": os.environ.get("DJANGO_LOGIN_RATE", "30/min"),
+        "registration": os.environ.get("DJANGO_REGISTRATION_RATE", "10/hour"),
+    },
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
 }

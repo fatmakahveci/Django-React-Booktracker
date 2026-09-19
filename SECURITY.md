@@ -51,8 +51,9 @@ Use a local checkout, an isolated database, test accounts, and synthetic book re
 - Use HTTPS and review reverse-proxy trust settings. Run `python manage.py check --deploy` with the actual production configuration.
 - Local SQLite databases must not be committed or included in source releases. Removing a database from the current tree does not remove it from Git history; treat any credentials previously included as exposed.
 - Back up databases before upgrades and review migration history before applying migrations.
-- The frontend stores JWTs in browser local storage. Protect against cross-site scripting and avoid running untrusted scripts on the application origin. Logout clears local credentials; it is not a server-side revocation of all previously issued tokens.
+- The frontend stores JWTs in browser local storage. Protect against cross-site scripting and avoid running untrusted scripts on the application origin. Logout blacklists the current refresh token and clears local credentials. Other sessions remain active; access tokens can remain valid for up to five minutes. If server logout fails, the UI reports that revocation could not be confirmed.
 - Password changes invalidate existing access and refresh tokens. Deploying password-revocation checks requires users with older tokens to sign in again.
+- Login and registration have per-IP request limits. Their default cache is process-local; multi-worker deployments require a shared cache and rate limits at a trusted proxy or gateway. Untrusted forwarding headers are ignored, and application throttling alone is not a complete brute-force or denial-of-service defense.
 - Refresh tokens rotate after successful refresh, and old refresh tokens are blacklisted. Custom clients must retain the newly returned token pair.
 - Install frontend dependencies from the committed lockfile with `npm ci`, review dependency alerts, and run the documented checks after upgrading.
 

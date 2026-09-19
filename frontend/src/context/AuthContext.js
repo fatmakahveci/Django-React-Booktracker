@@ -1,6 +1,6 @@
-import { publicApi as axios, readTokens, clearTokens } from "../api";
+import { publicApi as axios, readTokens, clearTokens, logoutSession } from "../api";
 import { jwtDecode } from "jwt-decode";
-import { createContext, useState } from "react";
+import { createContext, useRef, useState } from "react";
 
 const AuthContext = createContext();
 
@@ -20,9 +20,21 @@ export const AuthProvider = ({ children }) => {
 
   const [message, setMessage] = useState("");
   const [showMessage, setShowMessage] = useState(false);
+  const logoutPending = useRef(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  function showAuthError(error, fallback) {
+    const retryAfter = Number(error.response?.headers?.["retry-after"]);
+    const detail = error.response?.data?.detail;
+    setMessage(error.response?.status === 429
+      ? `Too many attempts. ${retryAfter > 0 ? `Try again in ${retryAfter} seconds.` : "Please wait before trying again."}`
+      : typeof detail === "string" ? detail : fallback);
+    setShowMessage(true);
+  }
 
   const registerUser = async (e) => {
     e.preventDefault();
+    setShowMessage(false);
 
     await axios
       .post("/register/", {
@@ -39,14 +51,18 @@ export const AuthProvider = ({ children }) => {
       })
       .catch((err) => {
         if (err?.response?.status === 400) {
-          setMessage(Object.values(err.response.data)[0][0]);
+          const firstError = Object.values(err.response.data)[0];
+          setMessage(Array.isArray(firstError) ? firstError[0] : String(firstError));
           setShowMessage(true);
+        } else {
+          showAuthError(err, "Could not register. Please try again.");
         }
       });
   };
 
   const loginUser = async (e) => {
     e.preventDefault();
+    setShowMessage(false);
 
     await axios
       .post("token/", {
@@ -60,21 +76,31 @@ export const AuthProvider = ({ children }) => {
         navigate("/books/");
       })
       .catch((err) => {
-        console.log(err);
+        showAuthError(err, "Could not sign in. Check your credentials and try again.");
       });
   };
 
-  const logoutUser = (event) => {
+  const logoutUser = async (event) => {
     event?.preventDefault();
-    setAuthTokens(null);
-    setUser(null);
-    clearTokens();
-    navigate("/");
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setIsLoggingOut(true);
+    let confirmed = true;
+    try {
+      await logoutSession();
+    } catch {
+      confirmed = false;
+    } finally {
+      setAuthTokens(null);
+      setUser(null);
+      navigate(confirmed ? "/" : "/login/?logout=unconfirmed");
+    }
   };
 
   const contextData = {
     user: user,
     authTokens: authTokens,
+    isLoggingOut,
     loginUser: loginUser,
     registerUser: registerUser,
     logoutUser: logoutUser,
