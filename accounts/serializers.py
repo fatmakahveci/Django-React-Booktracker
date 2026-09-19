@@ -1,5 +1,3 @@
-from re import match
-
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -12,24 +10,19 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from accounts.authentication import SessionJWTAuthentication
 
 from .models import CustomUser
-
-
-class CustomUserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomUser
-        fields = ["email", "user_name"]
+from .validators import validate_user_name
 
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         attrs["email"] = attrs["email"].strip().lower()
-        data = super().validate(attrs)
-        if settings.REQUIRE_EMAIL_VERIFICATION and not self.user.email_verified:
-            raise AuthenticationFailed("Verify your email before signing in.")
-        return data
+        return super().validate(attrs)
 
     @classmethod
     def get_token(cls, user):
+        # Reject unverified accounts before creating any outstanding token records.
+        if settings.REQUIRE_EMAIL_VERIFICATION and not user.email_verified:
+            raise AuthenticationFailed("Verify your email before signing in.")
         token = super().get_token(user)
 
         token["session_version"] = user.session_version
@@ -54,7 +47,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ("email", "user_name", "password")
         extra_kwargs = {
-            "password": {"write_only": True, "trim_whitespace": False, "max_length": 128}
+            "user_name": {"min_length": 4, "max_length": 24},
+            "password": {"write_only": True, "trim_whitespace": False, "max_length": 128},
         }
 
     def validate_email(self, value):
@@ -64,10 +58,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_user_name(self, value):
-        if not match(r"[\w.-]{4,24}\Z", value):
-            raise serializers.ValidationError(
-                "Use 4–24 letters, numbers, dots, underscores or hyphens."
-            )
+        validate_user_name(value)
         return value
 
     def validate(self, attrs):

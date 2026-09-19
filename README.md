@@ -94,7 +94,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The backend suite contains 49 tests. PostgreSQL row-lock and Redis integration tests require an isolated `DATABASE_URL` and `REDIS_URL`; SQLite runs skip those three checks. CI runs the complete backend suite on PostgreSQL/Redis across all supported Python versions. Browser tests use temporary databases/mailboxes and test the production build on desktop and mobile Chromium. Never point tests at a live database.
+PostgreSQL row-lock and Redis integration tests require an isolated `DATABASE_URL` and `REDIS_URL`; SQLite runs skip those integration checks. CI runs the complete backend suite on PostgreSQL/Redis across all supported Python versions. Browser tests override inherited database and telemetry settings, use temporary databases/mailboxes, and test the production build on desktop and mobile Chromium. Never point backend tests at a live database.
 
 The browser suite covers verified registration, password-reset emails, private cookies, refresh, CRUD, error retries, search/pagination, keyboard focus, responsive overflow and axe accessibility checks. Automated accessibility checks supplement manual testing; they do not establish complete WCAG conformance.
 
@@ -123,9 +123,8 @@ Production requires PostgreSQL, Redis, HTTPS, explicit allowed hosts, trusted CS
 - [Migration, backup, restore and rollback](docs/operations/recovery.md)
 - [Health checks, logs and monitoring](docs/operations/observability.md)
 - [Architecture and design decisions](docs/ARCHITECTURE.md)
-- [All 20 improvement items and verification evidence](docs/PROFESSIONALIZATION.md)
 
-Existing email addresses require verification after upgrading. Take a backup before migrations. The recovery rehearsal restored one synthetic account and eight books into a new PostgreSQL database.
+Existing email addresses require verification after upgrading. Take a backup before migrations.
 
 ## Security and contribution
 

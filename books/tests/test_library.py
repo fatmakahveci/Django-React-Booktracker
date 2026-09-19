@@ -68,3 +68,55 @@ class LibraryTests(TestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("fields", response.data["error"])
         self.assertIsNone(self.client.patch(path, {"finished": False}).data["finished_on"])
+
+    def test_isbn_rejects_unicode_digits_and_non_isbn_bar_codes(self):
+        for isbn in ("²" * 13, "²" * 10, "９７８０１４０３２８７２１", "0000000000000"):
+            with self.subTest(isbn=isbn):
+                response = self.client.post(
+                    "/books/",
+                    {"title": "A book", "author": "An author", "year": 2026, "isbn": isbn},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("isbn", response.data["error"]["fields"])
+        for isbn, normalized in (
+            ("978-0-14-032872-1", "9780140328721"),
+            ("0-8044-2957-x", "080442957X"),
+        ):
+            with self.subTest(isbn=isbn):
+                response = self.client.post(
+                    "/books/",
+                    {"title": "A book", "author": "An author", "year": 2026, "isbn": isbn},
+                )
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(response.data["isbn"], normalized)
+
+    def test_reopening_a_book_clears_finish_date_before_validating_new_start(self):
+        book = Book.objects.create(
+            user=self.user,
+            title="Read again",
+            author="Reader",
+            year=2026,
+            finished=True,
+            started_on="2026-01-01",
+            finished_on="2026-02-01",
+        )
+        response = self.client.patch(
+            f"/books/{book.pk}/", {"finished": False, "started_on": "2026-03-01"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["finished_on"])
+        response = self.client.patch(f"/books/{book.pk}/", {"finished_on": "2026-04-01"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["finished_on"])
+
+    def test_summary_uses_one_query_and_excludes_other_users(self):
+        other = CustomUser.objects.create_user("other@example.com", "other_reader", "test-pass")
+        Book.objects.create(user=other, title="Private", author="Other", year=2026, finished=True)
+        with self.assertNumQueries(1):
+            response = self.client.get("/books/summary/")
+        self.assertEqual(response.data, {"total": 25, "finished": 13, "unfinished": 12})
+        self.client.force_authenticate(other)
+        Book.objects.filter(user=other).delete()
+        self.assertEqual(
+            self.client.get("/books/summary/").data, {"total": 0, "finished": 0, "unfinished": 0}
+        )
