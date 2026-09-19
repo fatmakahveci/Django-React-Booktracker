@@ -25,7 +25,9 @@ CORS_ALLOWED_ORIGINS = env_list(
     "DJANGO_CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173" if DEBUG else ""
 )
 CORS_EXPOSE_HEADERS = ["Retry-After"]
-CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173" if DEBUG else ""
+)
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
@@ -47,13 +49,18 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
 ]
 MIDDLEWARE = [
+    "backend.middleware.RequestLogMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "accounts.middleware.AdminLoginThrottleMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -78,11 +85,14 @@ WSGI_APPLICATION = "backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.environ.get("DJANGO_DB_PATH", str(BASE_DIR / "db.sqlite3")),
+        "NAME": os.environ.get("DJANGO_DB_PATH", str(BASE_DIR / "local.sqlite3")),
     }
 }
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ["user_name", "email"]},
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -101,10 +111,15 @@ REST_FRAMEWORK = {
     "NUM_PROXIES": 0,
     "DEFAULT_THROTTLE_RATES": {
         "login": os.environ.get("DJANGO_LOGIN_RATE", "30/min"),
+        "refresh": os.environ.get("DJANGO_REFRESH_RATE", "60/min"),
         "registration": os.environ.get("DJANGO_REGISTRATION_RATE", "10/hour"),
+        "email": os.environ.get("DJANGO_EMAIL_RATE", "5/hour"),
+        "account": "30/hour",
     },
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["accounts.authentication.SessionJWTAuthentication"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "backend.errors.api_exception_handler",
 }
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
@@ -113,6 +128,7 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "CHECK_REVOKE_TOKEN": True,
     "TOKEN_REFRESH_SERIALIZER": "accounts.serializers.RevocableTokenRefreshSerializer",
+    "TOKEN_BLACKLIST_SERIALIZER": "accounts.serializers.ExistingTokenBlacklistSerializer",
 }
 AUTH_USER_MODEL = "accounts.CustomUser"
 AUTHENTICATION_BACKENDS = ("django.contrib.auth.backends.ModelBackend",)
@@ -142,6 +158,7 @@ if redis_url := os.environ.get("REDIS_URL"):
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": redis_url,
             "KEY_PREFIX": "booktracker",
+            "OPTIONS": {"socket_connect_timeout": 2, "socket_timeout": 2},
         }
     }
 
@@ -149,6 +166,7 @@ PUBLIC_URL = os.environ.get("DJANGO_PUBLIC_URL", "http://localhost:5173").rstrip
 EMAIL_BACKEND = os.environ.get(
     "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
+EMAIL_FILE_PATH = os.environ.get("DJANGO_EMAIL_FILE_PATH", str(BASE_DIR / "local-mail"))
 EMAIL_HOST = os.environ.get("DJANGO_EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.environ.get("DJANGO_EMAIL_PORT", "1025"))
 EMAIL_HOST_USER = os.environ.get("DJANGO_EMAIL_USER", "")
@@ -166,32 +184,24 @@ AUTH_COOKIE_SECURE = not DEBUG
 AUTH_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = True
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = env_list(
-    "DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173" if DEBUG else ""
-)
+CSRF_FAILURE_VIEW = "backend.errors.csrf_failure"
+AUTH_REDIS_URL = os.environ.get("REDIS_URL", "")
 # Only enable when the application is reachable exclusively through the trusted gateway.
 if os.environ.get("DJANGO_TRUST_PROXY", "false").lower() == "true":
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-INSTALLED_APPS += ["drf_spectacular"]
-REST_FRAMEWORK.update(
-    {
-        "DEFAULT_AUTHENTICATION_CLASSES": ["accounts.authentication.SessionJWTAuthentication"],
-        "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-        "EXCEPTION_HANDLER": "backend.errors.api_exception_handler",
-    }
-)
-REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"].update(
-    {"email": os.environ.get("DJANGO_EMAIL_RATE", "5/hour"), "account": "30/hour"}
-)
-AUTH_PASSWORD_VALIDATORS[0]["OPTIONS"] = {"user_attributes": ["user_name", "email"]}
 SPECTACULAR_SETTINGS = {
     "TITLE": "Booktracker API",
     "DESCRIPTION": "Private reading library and account API.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "accounts.schema.error_responses",
+    ],
 }
-MIDDLEWARE.insert(0, "backend.middleware.RequestLogMiddleware")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -215,17 +225,3 @@ if sentry_dsn := os.environ.get("SENTRY_DSN"):
         environment=os.environ.get("DJANGO_ENV", "development"),
         release=os.environ.get("APP_VERSION", "development"),
     )
-AUTH_REDIS_URL = os.environ.get("REDIS_URL", "")
-
-CSRF_FAILURE_VIEW = "backend.errors.csrf_failure"
-
-SPECTACULAR_SETTINGS["POSTPROCESSING_HOOKS"] = [
-    "drf_spectacular.hooks.postprocess_schema_enums",
-    "accounts.schema.error_responses",
-]
-
-EMAIL_FILE_PATH = os.environ.get("DJANGO_EMAIL_FILE_PATH", str(BASE_DIR / "local-mail"))
-
-INSTALLED_APPS += ["drf_spectacular_sidecar"]
-MIDDLEWARE.insert(2, "whitenoise.middleware.WhiteNoiseMiddleware")
-SPECTACULAR_SETTINGS.update({"SWAGGER_UI_DIST": "SIDECAR", "SWAGGER_UI_FAVICON_HREF": "SIDECAR"})

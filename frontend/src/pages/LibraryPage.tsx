@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, errorMessage } from "../api/client";
+import { api, ApiError, errorMessage } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { BookEditor, DeleteBook } from "../components/BookEditor";
 import type { Book, Page, Summary } from "../types";
 export function LibraryPage() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [search, setSearch] = useState(params.get("search") || "");
+  const urlSearch = params.get("search") || "";
+  const [search, setSearch] = useState(urlSearch);
   const [data, setData] = useState<Page<Book> | null>(null);
   const [summary, setSummary] = useState<Summary>({
     total: 0,
@@ -22,8 +23,8 @@ export function LibraryPage() {
   const [deleting, setDeleting] = useState<Book | null>(null);
   const [pending, setPending] = useState<number | null>(null);
   useEffect(() => {
-    setSearch(params.get("search") || "");
-  }, [params]);
+    setSearch(urlSearch);
+  }, [urlSearch]);
   const query = params.toString();
   const page = Math.max(1, Number(params.get("page")) || 1);
   const filter = params.get("finished") || "";
@@ -61,7 +62,13 @@ export function LibraryPage() {
         }
       })
       .catch((e) => {
-        if (active) setError(errorMessage(e));
+        if (!active) return;
+        if (e instanceof ApiError && e.status === 404 && page > 1) {
+          // Filtering or edits in another tab can remove the last page.
+          const next = new URLSearchParams(params);
+          next.delete("page");
+          setParams(next, { replace: true });
+        } else setError(errorMessage(e));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -69,7 +76,7 @@ export function LibraryPage() {
     return () => {
       active = false;
     };
-  }, [query, revision]);
+  }, [query, revision, page, params, setParams]);
   function refresh(message: string) {
     setNotice(message);
     setRevision((n) => n + 1);
@@ -97,7 +104,7 @@ export function LibraryPage() {
           <h1>Your library.</h1>
           <p className="lede">A home for your next chapter.</p>
         </div>
-        <button onClick={() => setEditor(null)}>
+        <button disabled={pending !== null} onClick={() => setEditor(null)}>
           <span aria-hidden="true">＋</span> Add a book
         </button>
       </div>
@@ -243,6 +250,7 @@ export function LibraryPage() {
                       <button
                         className="text-button"
                         aria-label={`Edit ${book.title}`}
+                        disabled={pending !== null}
                         onClick={() => setEditor(book)}
                       >
                         Edit
@@ -250,6 +258,7 @@ export function LibraryPage() {
                       <button
                         className="text-button muted"
                         aria-label={`Remove ${book.title}`}
+                        disabled={pending !== null}
                         onClick={() => setDeleting(book)}
                       >
                         Remove

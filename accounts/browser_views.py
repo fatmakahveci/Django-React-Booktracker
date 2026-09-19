@@ -12,13 +12,12 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from .account_serializers import (
     EmailSerializer,
@@ -29,14 +28,22 @@ from .account_serializers import (
     ResetPasswordSerializer,
     check_password,
 )
+from .authentication import locked_authenticated_user
 from .models import CustomUser
 from .schema import CSRFSerializer, DetailSerializer, EmptySerializer, LoginResponseSerializer
 from .serializers import (
+    ExistingTokenBlacklistSerializer,
     MyTokenObtainPairSerializer,
     RegistrationSerializer,
     RevocableTokenRefreshSerializer,
 )
-from .throttles import AccountThrottle, EmailThrottle, LoginThrottle, RegistrationThrottle
+from .throttles import (
+    AccountThrottle,
+    EmailThrottle,
+    LoginThrottle,
+    RefreshThrottle,
+    RegistrationThrottle,
+)
 from .tokens import email_verification_token
 
 
@@ -79,7 +86,8 @@ def send_link(user, generator, route, subject):
 def user_from_link(attrs, generator):
     try:
         uid = urlsafe_base64_decode(attrs["uid"]).decode()
-        user = CustomUser.objects.get(pk=uid, is_active=True)
+        # Call inside transaction.atomic(): concurrent requests must recheck the locked row.
+        user = CustomUser.objects.select_for_update().get(pk=uid, is_active=True)
     except (ValueError, TypeError, OverflowError, UnicodeDecodeError, CustomUser.DoesNotExist):
         raise ValidationError("The link is invalid or has expired.") from None
     if not generator.check_token(user, attrs["token"]):
@@ -114,8 +122,6 @@ class BrowserLoginView(PublicAction):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if settings.REQUIRE_EMAIL_VERIFICATION and not serializer.user.email_verified:
-            raise AuthenticationFailed("Verify your email before signing in.")
         return set_auth(
             Response({"user": ProfileSerializer(serializer.user).data}), serializer.validated_data
         )
@@ -138,6 +144,8 @@ class BrowserRegisterView(PublicAction):
 
 @extend_schema(responses=DetailSerializer)
 class BrowserRefreshView(PublicAction):
+    throttle_classes = [RefreshThrottle]
+
     def post(self, request):
         serializer = RevocableTokenRefreshSerializer(
             data={"refresh": request.COOKIES.get("bt_refresh", "")}
@@ -154,7 +162,9 @@ class BrowserLogoutView(PublicAction):
     def post(self, request):
         if refresh := request.COOKIES.get("bt_refresh"):
             try:
-                RefreshToken(refresh).blacklist()
+                ExistingTokenBlacklistSerializer(data={"refresh": refresh}).is_valid(
+                    raise_exception=True
+                )
             except TokenError:
                 pass
         return clear_auth(Response(status=status.HTTP_204_NO_CONTENT))
@@ -173,10 +183,11 @@ class ChangePasswordView(GenericAPIView):
     serializer_class = PasswordChangeSerializer
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        request.user.set_password(serializer.validated_data["new_password"])
-        request.user.save(update_fields=["password"])
+        with locked_authenticated_user(request) as user:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user.set_password(serializer.validated_data["new_password"])
+            user.save(update_fields=["password"])
         return clear_auth(Response({"detail": "Password changed. Sign in again."}))
 
 
@@ -186,11 +197,10 @@ class LogoutAllView(GenericAPIView):
     serializer_class = PasswordConfirmationSerializer
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        CustomUser.objects.filter(pk=request.user.pk).update(
-            session_version=F("session_version") + 1
-        )
+        with locked_authenticated_user(request) as user:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            CustomUser.objects.filter(pk=user.pk).update(session_version=F("session_version") + 1)
         return clear_auth(Response({"detail": "All sessions revoked."}))
 
 
@@ -200,12 +210,12 @@ class DeleteAccountView(GenericAPIView):
     serializer_class = PasswordConfirmationSerializer
 
     def delete(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
+        with locked_authenticated_user(request) as user:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
             # Outstanding JWT records otherwise survive as SET_NULL and retain identity claims.
-            OutstandingToken.objects.filter(user=request.user).delete()
-            request.user.delete()
+            OutstandingToken.objects.filter(user=user).delete()
+            user.delete()
         return clear_auth(Response(status=status.HTTP_204_NO_CONTENT))
 
 
@@ -236,10 +246,7 @@ class PasswordResetConfirmView(PublicAction):
         serializer.is_valid(raise_exception=True)
         attrs = serializer.validated_data
         with transaction.atomic():
-            candidate = user_from_link(attrs, default_token_generator)
-            user = CustomUser.objects.select_for_update().get(pk=candidate.pk)
-            if not default_token_generator.check_token(user, attrs["token"]):
-                raise ValidationError("The link is invalid or has expired.")
+            user = user_from_link(attrs, default_token_generator)
             user.set_password(check_password(attrs["password"], user))
             user.save(update_fields=["password"])
         return clear_auth(Response({"detail": "Password reset. Sign in with your new password."}))
@@ -252,9 +259,10 @@ class VerifyEmailView(PublicAction):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = user_from_link(serializer.validated_data, email_verification_token)
-        user.email_verified = True
-        user.save(update_fields=["email_verified"])
+        with transaction.atomic():
+            user = user_from_link(serializer.validated_data, email_verification_token)
+            user.email_verified = True
+            user.save(update_fields=["email_verified"])
         return Response({"detail": "Email verified. You can now sign in."})
 
 

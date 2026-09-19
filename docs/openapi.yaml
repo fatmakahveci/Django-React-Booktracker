@@ -1524,20 +1524,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TokenBlacklist'
+              $ref: '#/components/schemas/ExistingTokenBlacklist'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/TokenBlacklist'
+              $ref: '#/components/schemas/ExistingTokenBlacklist'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/TokenBlacklist'
+              $ref: '#/components/schemas/ExistingTokenBlacklist'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenBlacklist'
+                $ref: '#/components/schemas/ExistingTokenBlacklist'
           description: ''
         '400':
           description: Request failed. 429 includes Retry-After seconds.
@@ -1853,6 +1853,14 @@ components:
           maxLength: 150
       required:
       - email
+    ExistingTokenBlacklist:
+      type: object
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - refresh
     LinkToken:
       type: object
       properties:
@@ -1999,7 +2007,8 @@ components:
           readOnly: true
         user_name:
           type: string
-          maxLength: 50
+          maxLength: 24
+          minLength: 4
         email_verified:
           type: boolean
           readOnly: true
@@ -2019,7 +2028,8 @@ components:
           readOnly: true
         user_name:
           type: string
-          maxLength: 50
+          maxLength: 24
+          minLength: 4
         email_verified:
           type: boolean
           readOnly: true
@@ -2042,7 +2052,8 @@ components:
           maxLength: 150
         user_name:
           type: string
-          maxLength: 50
+          maxLength: 24
+          minLength: 4
         password:
           type: string
           writeOnly: true
@@ -2092,14 +2103,6 @@ components:
       - finished
       - total
       - unfinished
-    TokenBlacklist:
-      type: object
-      properties:
-        refresh:
-          type: string
-          writeOnly: true
-      required:
-      - refresh
     APIError:
       type: object
       required:

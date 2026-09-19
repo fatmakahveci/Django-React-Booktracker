@@ -41,12 +41,18 @@ class BookSerializer(serializers.ModelSerializer):
         if not value:
             return value
         valid = False
-        if len(value) == 13 and value.isdigit():
+        # str.isdigit() includes characters such as superscripts that int() cannot parse.
+        if value.isascii() and len(value) == 13 and value.isdigit() and value[:3] in ("978", "979"):
             valid = (
                 sum(int(digit) * (1 if i % 2 == 0 else 3) for i, digit in enumerate(value)) % 10
                 == 0
             )
-        elif len(value) == 10 and value[:9].isdigit() and (value[-1].isdigit() or value[-1] == "X"):
+        elif (
+            value.isascii()
+            and len(value) == 10
+            and value[:9].isdigit()
+            and (value[-1].isdigit() or value[-1] == "X")
+        ):
             valid = (
                 sum(
                     (10 - i) * (10 if digit == "X" else int(digit)) for i, digit in enumerate(value)
@@ -58,11 +64,6 @@ class BookSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Enter a valid ISBN-10 or ISBN-13.")
         return value
 
-    def validate_rating(self, value):
-        if value is not None and not 1 <= value <= 5:
-            raise serializers.ValidationError("Use a rating from 1 to 5.")
-        return value
-
     def validate_cover_url(self, value):
         # Browser-only image URLs; the API never fetches arbitrary remote resources.
         if value and urlparse(value).scheme != "https":
@@ -70,12 +71,13 @@ class BookSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if not attrs.get("finished", getattr(self.instance, "finished", False)):
+            # Clear the old finish date before checking dates when a book is reopened.
+            attrs["finished_on"] = None
         start = attrs.get("started_on", getattr(self.instance, "started_on", None))
         finish = attrs.get("finished_on", getattr(self.instance, "finished_on", None))
         if start and finish and finish < start:
             raise serializers.ValidationError(
                 {"finished_on": "Finish date cannot precede start date."}
             )
-        if attrs.get("finished") is False:
-            attrs["finished_on"] = None
         return attrs
