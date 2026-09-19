@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-booktracker}
+      POSTGRES_USER: ${POSTGRES_USER:-booktracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes: ["postgres_data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 15
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+  api:
+    build: .
+    image: ${API_IMAGE:-booktracker-api:local}
+    env_file: ${BOOKTRACKER_ENV_FILE:-.env}
+    environment:
+      DJANGO_ENV: development
+      DJANGO_DEBUG: 'true'
+      DATABASE_URL: postgresql://${POSTGRES_USER:-booktracker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booktracker}
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SCRIPT_NAME: /api
+      DJANGO_TRUST_PROXY: 'true'
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready/')"]
+      interval: 20s
+      retries: 5
+  web:
+    build: {context: ., dockerfile: frontend/Dockerfile}
+    image: ${WEB_IMAGE:-booktracker-web:local}
+    ports: ["127.0.0.1:8080:80"]
+    depends_on: [api]
+  mailpit:
+    image: axllent/mailpit:v1.29
+    ports: ["127.0.0.1:8025:8025"]
+  # Production TLS can terminate at the hosting provider's gateway.
+volumes:
+  postgres_data:
+  redis_data:
