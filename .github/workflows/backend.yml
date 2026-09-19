@@ -13,24 +13,41 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.12', '3.13', '3.14']
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: booktracker
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: --health-cmd 'redis-cli ping' --health-interval 5s --health-retries 10
     env:
+      DJANGO_ENV: test
       DJANGO_DEBUG: 'true'
       DJANGO_SECRET_KEY: ci-only-test-signing-key-not-for-production-0123456789abcdef
-      DJANGO_DB_PATH: ':memory:'
+      DATABASE_URL: postgresql://postgres:test-only-password@localhost:5432/booktracker
+      REDIS_URL: redis://localhost:6379/1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -r requirements-dev.txt
       - run: python -m pip check
-      - run: python manage.py check
-      - run: python manage.py makemigrations --check --dry-run
+      - run: ruff check . && ruff format --check .
+      - run: python manage.py check && python manage.py makemigrations --check --dry-run
       - run: python manage.py test
+      - run: python manage.py spectacular --file /tmp/openapi.yaml --validate --fail-on-warn && diff docs/openapi.yaml /tmp/openapi.yaml
       - run: python manage.py check --deploy --fail-level WARNING
         env:
+          DJANGO_ENV: production
           DJANGO_DEBUG: 'false'
+          DJANGO_PUBLIC_URL: https://example.com
           DJANGO_ALLOWED_HOSTS: example.com
           DJANGO_HSTS_INCLUDE_SUBDOMAINS: 'true'
           DJANGO_HSTS_PRELOAD: 'true'

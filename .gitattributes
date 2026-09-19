@@ -1,0 +1,3 @@
+*.sqlite3 export-ignore
+.env* export-ignore
+.env.example -export-ignore

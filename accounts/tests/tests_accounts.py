@@ -1,6 +1,7 @@
+from rest_framework import status
+
 from accounts.models import CustomUser
 from accounts.tests.base import BaseAccountTest
-from rest_framework import status
 
 
 class AccountAPITest(BaseAccountTest):

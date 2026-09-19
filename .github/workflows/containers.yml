@@ -1,0 +1,45 @@
+name: Portable deployment
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: python3 scripts/init-local.py
+      - run: docker compose build
+      - run: docker compose up -d --wait postgres redis mailpit
+      - run: docker compose run --rm api python manage.py migrate --noinput
+      - run: docker compose up -d --wait --wait-timeout 120
+      - run: curl --fail http://localhost:8080/api/health/ready/ && curl --fail http://localhost:8080/ > /dev/null
+      - run: docker compose logs --no-color --tail 50
+        if: failure()
+      - run: docker compose down
+        if: always()
+  publish:
+    if: github.event_name == 'release'
+    needs: smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Publish immutable revision images
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          registry="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build -t "$registry-api:sha-$GITHUB_SHA" .
+          docker build -f frontend/Dockerfile -t "$registry-web:sha-$GITHUB_SHA" .
+          docker push "$registry-api:sha-$GITHUB_SHA"
+          docker push "$registry-web:sha-$GITHUB_SHA"
