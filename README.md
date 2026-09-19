@@ -19,6 +19,8 @@ Captured from the local application with sample data: add a book, move it to the
 - Register an account and sign in with email and password.
 - Add books with a title, author, publication year, and reading status.
 - Browse finished and unfinished shelves, move books between them, and delete entries.
+- Edit a book’s title, author, and publication year from either shelf.
+- Retry failed operations with visible error messages and preserved form input.
 - Access a REST API for creating, retrieving, updating, and deleting books.
 - Keep each user's books private through server-side ownership checks.
 - Refresh expired access tokens automatically and persist rotated refresh tokens.
@@ -167,7 +169,7 @@ npx playwright install chromium
 npx playwright test
 ```
 
-Playwright starts a Django API on port 8191 and a Vite server on port 5191 with a temporary SQLite database. Keep those ports available. The browser flow covers registration, login, book creation, token rotation, rejection of the old refresh token, persistence after reload, and logout.
+Playwright starts a Django API on port 8191 and a Vite server on port 5191 with a temporary SQLite database. Keep those ports available. The browser flow covers registration, login, book creation, token rotation, rejection of the old refresh token, persistence after reload, and logout. Additional browser tests cover editing and cancelling changes, preserving reading status, failed mutations, and retrying failed shelf loads.
 
 GitHub Actions runs backend checks, frontend tests and builds, a dependency audit, and the browser integration test.
 
