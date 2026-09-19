@@ -10,6 +10,10 @@ where applicable.
 
 ### Changed
 
+- Upgrade to React 19.3, Vite 8.3, Vitest 5, jsdom 30, Axios 1.20, and Playwright 1.63.
+- Migrate JSX transformation and dependency optimization to Vite’s Oxc/Rolldown APIs.
+- Validate frontend compatibility on Node.js 22, 24, and 26 and declare supported runtime versions.
+
 - Upgraded Django to 6.1.1 and aligned the documented Python requirement with 3.12–3.14.
 - Validate backend checks, migrations, deployment settings, and tests on all three supported Python versions.
 
@@ -23,6 +27,10 @@ where applicable.
 - Added an initial changelog to track future project changes.
 
 ### Fixed
+
+- Revoke access and refresh tokens after password changes and reject refresh attempts for deleted accounts.
+- Apply configured Django password validators during registration.
+- Stop tracking the local SQLite database in source control.
 
 - Preserve form input after failed saves and update shelves only after successful API requests.
 - Prevent overlapping book mutations while a request is pending.
