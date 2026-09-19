@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from .models import CustomUser
 from re import match
 
@@ -19,6 +22,14 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token["user_name"] = user.user_name
 
         return token
+
+
+class RevocableTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        refresh = self.token_class(attrs["refresh"])
+        # Apply the same account and password-revocation checks as protected API requests.
+        JWTAuthentication().get_user(refresh)
+        return super().validate(attrs)
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -43,6 +54,11 @@ class RegistrationSerializer(serializers.ModelSerializer):
         password = attrs.get("password", "")
         if not match(PASSWORD_PATTERN, password):
             raise serializers.ValidationError("Password is not valid.")
+
+        try:
+            validate_password(password, user=CustomUser(email=email, user_name=user_name))
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": exc.messages}) from exc
 
         return attrs
 

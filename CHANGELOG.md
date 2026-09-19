@@ -28,6 +28,10 @@ where applicable.
 
 ### Fixed
 
+- Revoke access and refresh tokens after password changes and reject refresh attempts for deleted accounts.
+- Apply configured Django password validators during registration.
+- Stop tracking the local SQLite database in source control.
+
 - Preserve form input after failed saves and update shelves only after successful API requests.
 - Prevent overlapping book mutations while a request is pending.
 
