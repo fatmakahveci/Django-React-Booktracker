@@ -12,7 +12,9 @@ class DjangoUpgradeCompatibilityTests(TestCase):
         legacy_iterations = 1_000_000
         encoded = hasher.encode(password, hasher.salt(), iterations=legacy_iterations)
         user = CustomUser.objects.create(
-            email="legacy@example.com", user_name="legacy", password=encoded,
+            email="legacy@example.com",
+            user_name="legacy",
+            password=encoded,
         )
 
         response = APIClient().post("/token/", {"email": user.email, "password": password})
@@ -28,7 +30,9 @@ class DjangoUpgradeCompatibilityTests(TestCase):
 
     def test_admin_authentication_and_custom_user_pages(self):
         user = CustomUser.objects.create_superuser(
-            "admin@example.com", "admin", "Admin-test-password-1",
+            "admin@example.com",
+            "admin",
+            "Admin-test-password-1",
         )
         self.assertTrue(self.client.login(email=user.email, password="Admin-test-password-1"))
         for url in ("/admin/", "/admin/accounts/customuser/", "/admin/books/book/"):
