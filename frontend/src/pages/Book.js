@@ -1,147 +1,126 @@
 import axios from "../api";
-import { useContext, useEffect, useMemo, useState } from "react";
-import { Col, Container, Row } from "react-bootstrap";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Button, Col, Container, Modal, Row } from "react-bootstrap";
 import { AddBook } from "../components/AddBook";
+import { BookForm } from "../components/BookForm";
 import { Bookshelf } from "../components/Bookshelf";
-import AuthContext from "../context/AuthContext";
 
 export async function fetchFinishedList(config) {
   const response = await axios.get("/books/finished/", config);
   return response.data ?? response;
 }
 
+function errorMessage(error, fallback) {
+  const data = error.response?.data;
+  if (data && typeof data === "object") {
+    const details = Object.entries(data)
+      .filter(([, value]) => typeof value === "string" || Array.isArray(value))
+      .map(([field, value]) => `${field === "detail" || field === "non_field_errors" ? "" : `${field}: `}${Array.isArray(value) ? value.join(" ") : value}`);
+    if (details.length) return `${fallback} ${details.join(" ")}`;
+  }
+  return `${fallback} Please try again.`;
+}
+
 function Book() {
-  let { authTokens } = useContext(AuthContext);
-
-  const [unfinishedList, setUnfinishedList] = useState([]);
-  const [finishedList, setFinishedList] = useState([]);
-
-
-  const config = useMemo(
-    () => ({
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + authTokens?.access,
-      },
-    }),
-    [authTokens?.access]
-  );
+  const [books, setBooks] = useState([]);
+  const [editingBook, setEditingBook] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
 
   useEffect(() => {
-    async function loadBooks() {
-      try {
-        const unfinishedResponse = await axios.get("/books/unfinished/", config);
-        setUnfinishedList(unfinishedResponse.data);
-        setFinishedList(await fetchFinishedList(config));
-      } catch (err) {
-        console.log(err);
-      }
-    }
-
-    loadBooks();
-  }, [config]);
-
-  async function setFinished(book, finished) {
-    await axios
-      .patch(`/books/${book.id}/`, { finished: finished }, config)
-      .then((response) => {
-        return response;
-      })
+    let active = true;
+    setLoading(true);
+    setLoadFailed(false);
+    setError("");
+    axios.get("/books/")
+      .then(({ data }) => { if (active) setBooks(data); })
       .catch((err) => {
-        console.log(err);
-      });
+        if (active) {
+          setLoadFailed(true);
+          setError(errorMessage(err, "Could not load your books."));
+        }
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [loadAttempt]);
+
+  async function mutate(request, onSuccess, message) {
+    if (pending.current) return false;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await request();
+      onSuccess(response.data);
+      return true;
+    } catch (err) {
+      setError(errorMessage(err, message));
+      return false;
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
-  async function deleteBook(book) {
-    await axios.delete(`/books/${book.id}/`, config);
+  const replaceBook = (saved) => setBooks((current) => current.map((book) => book.id === saved.id ? saved : book));
+  const handleAddBook = (book) => mutate(
+    () => axios.post("/books/", book),
+    (saved) => setBooks((current) => [...current, saved]),
+    "Could not add the book.",
+  );
+  const handleToggleBook = (book) => mutate(
+    () => axios.patch(`/books/${book.id}/`, { finished: !book.finished }),
+    replaceBook,
+    "Could not change the reading status.",
+  );
+  const handleDeleteBook = (book) => mutate(
+    () => axios.delete(`/books/${book.id}/`),
+    () => setBooks((current) => current.filter((item) => item.id !== book.id)),
+    "Could not delete the book.",
+  );
+  const handleEditBook = (changes) => mutate(
+    () => axios.patch(`/books/${editingBook.id}/`, changes),
+    (saved) => { replaceBook(saved); setEditingBook(null); },
+    "Could not save your changes.",
+  );
+  function closeEditor() {
+    if (pending.current) return;
+    setEditingBook(null);
+    setError("");
   }
-
-  const handleAddBook = async (book) => {
-    let savedBook = await axios
-      .post("/books/", book, config)
-      .then((response) => {
-        return response.data;
-      })
-      .catch((err) => {
-        console.log(err);
-      });
-    if (savedBook.finished) {
-      setFinishedList([...finishedList, savedBook]);
-    } else {
-      setUnfinishedList([...unfinishedList, savedBook]);
-    }
-  };
-
-  const handleToggleBook = async (book) => {
-    const moveBook = (sourceList, setSourceList, destList, setDestList) => {
-      const newSourceList = sourceList.filter((mBook) => {
-        return mBook.id !== book.id;
-      });
-      setSourceList(newSourceList);
-
-      const newDestList = [...destList, { ...book, finished: !book.finished }];
-      setDestList(newDestList);
-    };
-
-    await setFinished(book, !book.finished);
-
-    if (book.finished) {
-      moveBook(
-        finishedList,
-        setFinishedList,
-        unfinishedList,
-        setUnfinishedList
-      );
-    } else {
-      moveBook(
-        unfinishedList,
-        setUnfinishedList,
-        finishedList,
-        setFinishedList
-      );
-    }
-  };
-
-  const handleDeleteBook = (book) => {
-    const deleteFromList = (list, setList) => {
-      const newList = list.filter((mBook) => mBook.id !== book.id);
-      setList(newList);
-    };
-
-    deleteBook(book).then((_) => {
-      if (book.finished) {
-        deleteFromList(finishedList, setFinishedList);
-      } else {
-        deleteFromList(unfinishedList, setUnfinishedList);
-      }
-    });
-  };
+  const sortedBooks = [...books].sort((a, b) => b.year - a.year);
 
   return (
     <Container className="mt-3">
-      <article className="row">
-        <Row>
-          <Col lg={4}>
-            <AddBook handleAddBook={handleAddBook} />
-          </Col>
-          <Col lg={4}>
+      {error && !editingBook && <Alert variant="danger" role="alert">{error}</Alert>}
+      {loading && <p role="status">Loading your books…</p>}
+      {loadFailed && <Button className="mb-3" onClick={() => setLoadAttempt((value) => value + 1)}>Retry loading books</Button>}
+      <Row>
+        <Col lg={4}><AddBook handleAddBook={handleAddBook} busy={busy} disabled={loading || loadFailed} /></Col>
+        {[false, true].map((finished) => (
+          <Col lg={4} key={String(finished)}>
             <Bookshelf
-              finished={false}
-              bookList={unfinishedList}
+              finished={finished}
+              bookList={sortedBooks.filter((book) => book.finished === finished)}
               handleToggleBook={handleToggleBook}
               handleDeleteBook={handleDeleteBook}
+              handleEditBook={(book) => { setError(""); setEditingBook(book); }}
+              busy={busy || loading}
             />
           </Col>
-          <Col lg={4}>
-            <Bookshelf
-              finished={true}
-              bookList={finishedList}
-              handleToggleBook={handleToggleBook}
-              handleDeleteBook={handleDeleteBook}
-            />
-          </Col>
-        </Row>
-      </article>
+        ))}
+      </Row>
+      <Modal show={Boolean(editingBook)} onHide={closeEditor} backdrop={busy ? "static" : true} keyboard={!busy} aria-labelledby="edit-book-heading">
+        <Modal.Header closeButton={!busy}><Modal.Title id="edit-book-heading">Edit book</Modal.Title></Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" role="alert">{error}</Alert>}
+          {editingBook && <BookForm key={editingBook.id} initialBook={editingBook} onSave={handleEditBook} onCancel={closeEditor} busy={busy} />}
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 }
