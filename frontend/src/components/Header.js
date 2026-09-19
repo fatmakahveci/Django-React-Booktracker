@@ -3,7 +3,7 @@ import "../assets/css/App.css";
 import AuthContext from "../context/AuthContext";
 
 const Header = ({ setIsLoggedIn }) => {
-  let { user, logoutUser } = useContext(AuthContext);
+  let { user, logoutUser, isLoggingOut } = useContext(AuthContext);
 
   useEffect(() => {
     if (user) {
@@ -20,8 +20,8 @@ const Header = ({ setIsLoggedIn }) => {
           <div className="collapse navbar-collapse" id="navbarSupportedContent">
             <ul className="navbar-nav ml-auto">
               <li className="nav-item">
-                <a className="nav-link" onClick={logoutUser} href="/">
-                  Logout
+                <a className="nav-link" onClick={logoutUser} aria-disabled={isLoggingOut} href="/">
+                  {isLoggingOut ? "Signing out…" : "Logout"}
                 </a>
               </li>
             </ul>

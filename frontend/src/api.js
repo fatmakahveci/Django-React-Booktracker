@@ -19,8 +19,33 @@ const baseURL = import.meta.env.VITE_API_URL || "http://localhost:8000/";
 export const publicApi = axios.create({ baseURL, timeout: 15000 });
 const api = axios.create({ baseURL, timeout: 15000 });
 let refreshing;
+let loggingOut = false;
+
+export async function logoutSession() {
+  loggingOut = true;
+  let tokens = readTokens();
+  try {
+    // A refresh already in flight may rotate the token we need to revoke.
+    if (refreshing) {
+      try { tokens = await refreshing; } catch { /* Revoke the last known token. */ }
+    }
+    clearTokens();
+    if (tokens?.refresh) {
+      try {
+        await publicApi.post("/logout/", { refresh: tokens.refresh });
+      } catch (error) {
+        // An expired or already blacklisted refresh token cannot be reused.
+        if (error.response?.status !== 401) throw error;
+      }
+    }
+  } finally {
+    clearTokens();
+    loggingOut = false;
+  }
+}
 
 api.interceptors.request.use((config) => {
+  if (loggingOut) throw new Error("Logout in progress");
   const tokens = readTokens();
   if (tokens) config.headers.Authorization = `Bearer ${tokens.access}`;
   return config;
@@ -29,7 +54,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use((response) => response, async (error) => {
   const original = error.config;
   const tokens = readTokens();
-  if (error.response?.status !== 401 || !original || original._retried || !tokens) {
+  if (loggingOut || error.response?.status !== 401 || !original || original._retried || !tokens) {
     return Promise.reject(error);
   }
   original._retried = true;
@@ -51,7 +76,7 @@ api.interceptors.response.use((response) => response, async (error) => {
     return api(original);
   } catch (refreshError) {
     // Never erase a newer login or resurrect a session after logout.
-    if (readTokens()?.refresh === tokens.refresh) {
+    if (!loggingOut && readTokens()?.refresh === tokens.refresh) {
       clearTokens();
       window.location.assign("/login/");
     }

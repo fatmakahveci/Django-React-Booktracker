@@ -23,7 +23,8 @@ Captured from the local application with sample data: add a book, move it to the
 - Retry failed operations with visible error messages and preserved form input.
 - Access a REST API for creating, retrieving, updating, and deleting books.
 - Keep each user's books private through server-side ownership checks.
-- Refresh expired access tokens automatically and persist rotated refresh tokens.
+- Refresh expired access tokens automatically, persist rotated refresh tokens, and revoke the current refresh token on logout.
+- Limit login and registration requests per IP, with visible retry guidance.
 
 ## Technology
 
@@ -98,6 +99,8 @@ Failed saves retain your input, and failed updates or deletions leave the shelf 
 | Variable | Purpose / default |
 | --- | --- |
 | `DJANGO_SECRET_KEY` | Required: a unique random value of at least 50 characters; cannot start with `django-insecure-`. |
+| `DJANGO_LOGIN_RATE` | Login requests per IP; defaults to `30/min`. |
+| `DJANGO_REGISTRATION_RATE` | Registration requests per IP; defaults to `10/hour`. |
 | `DJANGO_DEBUG` | Defaults to `false`. Set to `true` for local development. |
 | `DJANGO_DB_PATH` | SQLite path; defaults to the repository's `db.sqlite3`. Use `local.sqlite3` for development. |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts. In debug mode, defaults to `localhost,127.0.0.1`; otherwise empty. |
@@ -125,6 +128,7 @@ All paths are relative to the API host. Book endpoints require an `Authorization
 | `POST` | `/register/` | Register with `email`, `user_name`, and `password`. |
 | `POST` | `/token/` | Sign in with `email` and `password`; receive access and refresh tokens. |
 | `POST` | `/token/refresh/` | Send `refresh`; receive a new token pair. |
+| `POST` | `/logout/` | Send `refresh` to blacklist that token; no access token is required. |
 | `GET`, `POST` | `/books/` | List your books or create a book. |
 | `GET`, `PUT`, `PATCH`, `DELETE` | `/books/<id>/` | Retrieve, update, or delete one of your books. |
 | `GET` | `/books/finished/` | List your finished books. |
@@ -149,7 +153,13 @@ Access tokens expire after five minutes and refresh tokens after seven days. Ref
 
 Changing an account’s password invalidates its existing access and refresh tokens. Refresh attempts for deleted or inactive accounts are rejected. Deploying these password-revocation checks also invalidates previously issued tokens without the revocation claim; users must sign in again.
 
-The client stores tokens in browser local storage. Logout clears local credentials; it does not revoke every previously issued token on the server. See the [security policy](SECURITY.md) for reporting vulnerabilities and deployment considerations.
+The client stores tokens in browser local storage. Logout waits for any pending token rotation, blacklists the current refresh token, and clears local credentials. Other sessions remain active, and already issued access tokens can remain valid for up to five minutes. If the server cannot confirm logout, local credentials are still cleared and the login page reports that server revocation could not be confirmed. See the [security policy](SECURITY.md) for reporting vulnerabilities and deployment considerations.
+
+### Request limits
+
+Login allows 30 requests per minute per IP; registration allows 10 per hour. Both successful and failed requests count. Exceeding the limit returns HTTP `429` with a `Retry-After` header, exposed to the frontend through CORS. Configure the rates with `DJANGO_LOGIN_RATE` and `DJANGO_REGISTRATION_RATE`.
+
+The limiter uses the socket peer address (`REMOTE_ADDR`) and ignores client-supplied forwarding headers. Behind a proxy, configure the server to obtain client addresses only from a trusted proxy; otherwise clients share the proxy's limit. Django's default local-memory cache keeps counters per process. Production deployments with multiple workers must configure a shared Django cache and apply rate limiting at the trusted proxy or gateway. DRF's cache-based throttling is best-effort under concurrency and is not a complete defense against distributed brute-force or denial-of-service attacks.
 
 ## Tests and quality checks
 
@@ -164,7 +174,7 @@ python manage.py makemigrations --check --dry-run
 python manage.py test
 ```
 
-Backend tests cover account registration and password-policy enforcement, authentication, token rotation, password-change revocation, deleted-account refresh rejection, book operations, ownership isolation, and Django compatibility.
+Backend tests cover account registration and password-policy enforcement, authentication, token rotation, password-change revocation, deleted-account refresh rejection, logout revocation, request limits, book operations, ownership isolation, and Django compatibility.
 
 ### Frontend
 
@@ -187,7 +197,7 @@ npx playwright install chromium
 npx playwright test
 ```
 
-Playwright starts a Django API on port 8191 and a Vite server on port 5191 with a temporary SQLite database. Keep those ports available. The browser flow covers registration, login, book creation, token rotation, rejection of the old refresh token, persistence after reload, and logout. Additional browser tests cover editing and cancelling changes, preserving reading status, failed mutations, and retrying failed shelf loads.
+Playwright starts a Django API on port 8191 and a Vite server on port 5191 with a temporary SQLite database. Keep those ports available. The browser flow covers registration, login, book creation, token rotation, rejection of the old refresh token, persistence after reload, and logout. Additional browser tests cover editing and cancelling changes, preserving reading status, failed mutations, retrying failed shelf loads, rate-limit messages, and local cleanup when server logout fails.
 
 GitHub Actions runs backend checks on Python 3.12, 3.13, and 3.14. On Node.js 22, 24, and 26 it verifies strict dependency installation, unit tests, the production build, npm audits, and browser integration with a real Django API. Both the root and frontend npm manifests are audited.
 

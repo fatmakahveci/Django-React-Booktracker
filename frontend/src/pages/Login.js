@@ -11,7 +11,7 @@ const EMAIL_REGEX = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(.\w{2,3})+$/;
 const PWD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%.]).{8,24}$/;
 
 const Login = () => {
-  const { loginUser } = useContext(AuthContext);
+  const { loginUser, message, showMessage } = useContext(AuthContext);
 
   const [email, setEmail] = useState("");
   const [validEmail, setValidEmail] = useState(false);
@@ -45,6 +45,10 @@ const Login = () => {
   return (
     <div className="my-form">
       <h1>Login</h1>
+      {new URLSearchParams(window.location.search).get("logout") === "unconfirmed" && (
+        <p role="alert" className="errmsg">Signed out on this browser. Server logout could not be confirmed; your refresh token may remain valid until it expires. Sign in and change your password if you need to revoke all sessions.</p>
+      )}
+      {showMessage && <p role="alert" className="errmsg">{message}</p>}
       <form onSubmit={loginUser}>
         <div className="form-group row">
           <label
