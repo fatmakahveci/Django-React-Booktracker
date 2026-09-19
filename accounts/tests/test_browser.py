@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.db import connection, connections
 from django.test import TestCase, TransactionTestCase, override_settings
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from accounts.models import CustomUser
 from books.models import Book
@@ -144,11 +145,16 @@ class BrowserAccountTests(TestCase):
             self.client.delete("/auth/account/", {"password": "wrong"}).status_code, 400
         )
         self.assertTrue(CustomUser.objects.filter(pk=self.user.pk).exists())
+        token_ids = list(
+            OutstandingToken.objects.filter(user=self.user).values_list("pk", flat=True)
+        )
+        self.assertTrue(token_ids)
         self.assertEqual(
             self.client.delete("/auth/account/", {"password": self.password}).status_code, 204
         )
         self.assertFalse(CustomUser.objects.filter(pk=self.user.pk).exists())
         self.assertFalse(Book.objects.exists())
+        self.assertFalse(OutstandingToken.objects.filter(pk__in=token_ids).exists())
 
 
 @skipUnless(connection.vendor == "postgresql", "PostgreSQL row locking integration test")
