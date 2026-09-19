@@ -1,245 +1,134 @@
-# Django React Book Tracker
+# Booktracker
 
-A personal reading tracker built with Django REST Framework and React. Add books to your shelf, separate finished and unfinished reads, and update your reading progress through a browser interface.
+A quiet place for your reading life. Keep a private bookshelf, track the books you finish, and save the notes you want to return to.
 
 [![Backend quality](https://github.com/fatmakahveci/Django-React-Booktracker/actions/workflows/backend.yml/badge.svg)](https://github.com/fatmakahveci/Django-React-Booktracker/actions/workflows/backend.yml)
 [![Frontend quality](https://github.com/fatmakahveci/Django-React-Booktracker/actions/workflows/frontend.yml/badge.svg)](https://github.com/fatmakahveci/Django-React-Booktracker/actions/workflows/frontend.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE.md)
+[![Portable deployment](https://github.com/fatmakahveci/Django-React-Booktracker/actions/workflows/containers.yml/badge.svg)](https://github.com/fatmakahveci/Django-React-Booktracker/actions/workflows/containers.yml)
+
+![Booktracker library with synthetic books](docs/demo/bookshelf.png)
 
 ## Demo
 
-![Book Tracker demo: add a book, mark it as finished, and organize finished and unfinished shelves.](docs/demo/booktracker-demo.gif)
+![Library, finished shelf, book editor and account controls](docs/demo/booktracker-demo.gif)
 
-Captured from the local application with sample data: add a book, move it to the finished shelf, and add another book to the reading list.
+The screenshots use a synthetic local account. [Mobile view](docs/demo/mobile.png) · [Welcome page](docs/demo/landing.png). No public demo host has been provisioned. The Docker setup below runs the complete app and a local mailbox on your machine.
 
-[View the bookshelf screenshot](docs/demo/bookshelf.png) · [Run the app locally](#local-setup)
+## What it does
 
-## Features
+- Private bookshelves with add, edit, delete and finished/to-read controls.
+- Server-side search by title, author or ISBN, sorting, filters and bounded pagination.
+- ISBN validation, optional HTTPS cover images, reading notes, ratings and start/finish dates.
+- Email verification, password reset, profile editing, password changes, all-device sign-out and account deletion.
+- HttpOnly authentication cookies, CSRF protection, rotating refresh tokens, owner checks and shared Redis authentication limits.
+- Responsive layouts, keyboard-accessible dialogs, visible focus, loading/error states and retryable forms.
+- OpenAPI documentation, health endpoints, structured logs and optional scrubbed exception reporting.
 
-- Register an account and sign in with email and password.
-- Add books with a title, author, publication year, and reading status.
-- Browse finished and unfinished shelves, move books between them, and delete entries.
-- Edit a book’s title, author, and publication year from either shelf.
-- Retry failed operations with visible error messages and preserved form input.
-- Access a REST API for creating, retrieving, updating, and deleting books.
-- Keep each user's books private through server-side ownership checks.
-- Refresh expired access tokens automatically, persist rotated refresh tokens, and revoke the current refresh token on logout.
-- Limit login and registration requests per IP, with visible retry guidance.
+## Run with Docker
 
-## Technology
+Requirements: Docker Engine/Desktop with Docker Compose, and Python 3 to generate private local credentials.
 
-| Layer | Tools |
-| --- | --- |
-| Backend | Python 3.12–3.14, Django 6.1.1, Django REST Framework 3.18.1 |
-| Authentication | Simple JWT 5.5.1, refresh-token rotation, blacklisting, password-change revocation |
-| Database | SQLite |
-| Frontend | React 19.3, JavaScript, Vite 8.3, Axios 1.20 |
-| Interface | Bootstrap, React Bootstrap, Font Awesome |
-| Testing | Django test runner, Vitest 5, jsdom 30, Playwright 1.63 |
-| CI | GitHub Actions |
-
-Backend versions are pinned in [requirements.txt](requirements.txt). Frontend dependencies and scripts are defined in [frontend/package.json](frontend/package.json), with resolved versions in [frontend/package-lock.json](frontend/package-lock.json). The Vite configuration uses Oxc/Rolldown to support the existing JSX components stored in `.js` files.
-
-## Local setup
-
-The commands below use a macOS/Linux shell. Use Python 3.12, 3.13, or 3.14, and Node.js 22.22.2+, 24.15.0+, or 26+ with npm. CI tests the backend on all three Python versions and the frontend on Node.js 22, 24, and 26. Node.js 20 is no longer supported by the test tooling.
-
-### 1. Clone the repository
-
-```bash
+```sh
 git clone https://github.com/fatmakahveci/Django-React-Booktracker.git
 cd Django-React-Booktracker
+python3 scripts/init-local.py
+docker compose build
+docker compose up -d --wait postgres redis mailpit
+docker compose run --rm api python manage.py migrate --noinput
+docker compose up -d --wait
 ```
 
-### 2. Start the API
+Open **http://localhost:8080**. Create an account, open **http://localhost:8025** for the verification email, then follow the link. Mailpit captures local mail; it does not send messages to real recipients. API docs are at **http://localhost:8080/api/docs/**.
 
-From the repository root:
+`init-local.py` creates `.env` with random credentials and private permissions; it refuses to replace an existing file. Keep `.env` out of Git. PostgreSQL and Redis have persistent Docker volumes. Stop with `docker compose down`; avoid `--volumes` unless you intend to erase local data.
 
-```bash
+To populate a local demo, set `BOOKTRACKER_DEMO_PASSWORD` to a password of at least 12 characters, then run:
+
+```sh
+docker compose run --rm -e BOOKTRACKER_DEMO_PASSWORD api python manage.py seed_demo
+```
+
+Sign in as `demo@example.invalid` using that password. Seeding creates eight synthetic books, refuses to overwrite an existing account and is disabled outside development.
+
+## Develop without Docker
+
+Supported runtime matrix: **Python 3.12 / 3.13 / 3.14**, **Node 22.22.2+ / 24.15.0+ / 26**. Main libraries: Django 6.1, DRF 3.18, React 19.3, React Router 7, TypeScript 6.0 and Vite 8. TypeScript 6.0.3 matches the installed ESLint tooling's supported range.
+
+```sh
 python3.13 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
-
+pip install -r requirements-dev.txt
 export DJANGO_DEBUG=true
+export DJANGO_DB_PATH=local.sqlite3
 export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
-export DJANGO_DB_PATH="$PWD/local.sqlite3"
-
 python manage.py migrate
-python manage.py runserver 127.0.0.1:8000
+python manage.py runserver
 ```
 
-Substitute `python3.12` or `python3.14` if needed. The commands create a separate local database and leave any existing `db.sqlite3` untouched. Re-export the environment variables when opening a new backend shell; Django does not load `.env` files automatically. Keep the same local signing key between sessions if you want existing tokens to remain valid.
+In another terminal:
 
-### 3. Start the frontend
-
-In a second terminal, from the repository root:
-
-```bash
+```sh
 cd frontend
 npm ci --strict-peer-deps --engine-strict
-npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+npm run dev
 ```
 
-Open **http://127.0.0.1:5173**, register an account, sign in, and open your books page. The API is available at **http://127.0.0.1:8000**. Install frontend dependencies inside `frontend/`.
+Open **http://localhost:5173**. Vite proxies `/api/` to Django. Local development uses SQLite and prints verification/reset emails in the backend terminal. Use a persistent private signing key in a local environment file or secret store when you want sessions to survive restarts; Django does not automatically load `.env` outside Docker. `DJANGO_DB_PATH` selects a different local database.
 
-Registration also enforces Django’s configured password validators, including similarity and common-password checks. Registration passwords must contain 8–24 characters, including an uppercase letter, a lowercase letter, a digit, and at least one of `! @ # $ % .`.
+## Validate changes
 
-## Using the app
+Activate the Python environment and set the development signing key above before running:
 
-1. Register and sign in with your email address.
-2. Add a title, author, and publication year. Select **Finished?** if you have already read the book.
-3. Use **Finish** or **Unfinish** to move a book between shelves.
-4. Select **Edit** on either shelf to update its details, then **Save changes** or **Cancel**.
-5. Use **Delete** to remove an entry.
-
-Failed saves retain your input, and failed updates or deletions leave the shelf unchanged. If the bookshelf fails to load, use **Retry loading books**. Buttons are disabled while a book operation is pending to prevent overlapping submissions.
-
-## Configuration
-
-| Variable | Purpose / default |
-| --- | --- |
-| `DJANGO_SECRET_KEY` | Required: a unique random value of at least 50 characters; cannot start with `django-insecure-`. |
-| `DJANGO_LOGIN_RATE` | Login requests per IP; defaults to `30/min`. |
-| `DJANGO_REGISTRATION_RATE` | Registration requests per IP; defaults to `10/hour`. |
-| `DJANGO_DEBUG` | Defaults to `false`. Set to `true` for local development. |
-| `DJANGO_DB_PATH` | SQLite path; defaults to the repository's `db.sqlite3`. Use `local.sqlite3` for development. |
-| `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts. In debug mode, defaults to `localhost,127.0.0.1`; otherwise empty. |
-| `DJANGO_CORS_ALLOWED_ORIGINS` | Comma-separated origins. In debug mode, permits localhost and 127.0.0.1 on port 5173; otherwise empty. |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | Comma-separated trusted origins; empty by default. |
-| `DJANGO_HSTS_INCLUDE_SUBDOMAINS` | Defaults to `false`. Enable only if every subdomain supports HTTPS. |
-| `DJANGO_HSTS_PRELOAD` | Defaults to `false`. Enable only when the domain meets HSTS preload requirements. |
-| `VITE_API_URL` | Frontend API base URL; defaults to `http://localhost:8000/`. Set before starting Vite or building. |
-
-For example, build the frontend for a separately hosted API:
-
-```bash
-cd frontend
-VITE_API_URL=https://api.example.com/ npm run build
-```
-
-The build is written to `frontend/dist/`. The API must permit the deployed frontend origin. Configure the frontend host to serve `index.html` for application routes such as `/login/`, `/register/`, and `/books/`.
-
-## REST API
-
-All paths are relative to the API host. Book endpoints require an `Authorization: Bearer <access-token>` header.
-
-| Method | Endpoint | Action |
-| --- | --- | --- |
-| `POST` | `/register/` | Register with `email`, `user_name`, and `password`. |
-| `POST` | `/token/` | Sign in with `email` and `password`; receive access and refresh tokens. |
-| `POST` | `/token/refresh/` | Send `refresh`; receive a new token pair. |
-| `POST` | `/logout/` | Send `refresh` to blacklist that token; no access token is required. |
-| `GET`, `POST` | `/books/` | List your books or create a book. |
-| `GET`, `PUT`, `PATCH`, `DELETE` | `/books/<id>/` | Retrieve, update, or delete one of your books. |
-| `GET` | `/books/finished/` | List your finished books. |
-| `GET` | `/books/unfinished/` | List your unfinished books. |
-
-Example book creation body:
-
-```json
-{
-  "title": "The Left Hand of Darkness",
-  "author": "Ursula K. Le Guin",
-  "year": 1969,
-  "finished": false
-}
-```
-
-The server assigns the authenticated user as the owner; client-provided `user` values are read-only. Books are returned in descending publication-year order.
-
-### Authentication behavior
-
-Access tokens expire after five minutes and refresh tokens after seven days. Refreshing rotates the refresh token and blacklists the old one, so API clients must save the returned token pair. The React client handles this automatically.
-
-Changing an account’s password invalidates its existing access and refresh tokens. Refresh attempts for deleted or inactive accounts are rejected. Deploying these password-revocation checks also invalidates previously issued tokens without the revocation claim; users must sign in again.
-
-The client stores tokens in browser local storage. Logout waits for any pending token rotation, blacklists the current refresh token, and clears local credentials. Other sessions remain active, and already issued access tokens can remain valid for up to five minutes. If the server cannot confirm logout, local credentials are still cleared and the login page reports that server revocation could not be confirmed. See the [security policy](SECURITY.md) for reporting vulnerabilities and deployment considerations.
-
-### Request limits
-
-Login allows 30 requests per minute per IP; registration allows 10 per hour. Both successful and failed requests count. Exceeding the limit returns HTTP `429` with a `Retry-After` header, exposed to the frontend through CORS. Configure the rates with `DJANGO_LOGIN_RATE` and `DJANGO_REGISTRATION_RATE`.
-
-The limiter uses the socket peer address (`REMOTE_ADDR`) and ignores client-supplied forwarding headers. Behind a proxy, configure the server to obtain client addresses only from a trusted proxy; otherwise clients share the proxy's limit. Django's default local-memory cache keeps counters per process. Production deployments with multiple workers must configure a shared Django cache and apply rate limiting at the trusted proxy or gateway. DRF's cache-based throttling is best-effort under concurrency and is not a complete defense against distributed brute-force or denial-of-service attacks.
-
-## Tests and quality checks
-
-### Backend
-
-From the repository root, with the virtual environment active and the development environment variables set:
-
-```bash
-python -m pip check
-python manage.py check
+```sh
+DJANGO_ENV=test python manage.py test
 python manage.py makemigrations --check --dry-run
-python manage.py test
-```
-
-Backend tests cover account registration and password-policy enforcement, authentication, token rotation, password-change revocation, deleted-account refresh rejection, logout revocation, request limits, book operations, ownership isolation, and Django compatibility.
-
-### Frontend
-
-```bash
+ruff check .
+ruff format --check .
+DJANGO_ENV=test python manage.py spectacular --file /tmp/openapi.yaml --validate --fail-on-warn
 cd frontend
+npm run lint
+npm run format:check
 npm test
 npm run build
-npm ls --all
-npm audit
-```
-
-### Browser integration
-
-From the repository root, after installing both backend and frontend dependencies:
-
-```bash
-source .venv/bin/activate
-cd frontend
 npx playwright install chromium
-npx playwright test
+npm run test:e2e
 ```
 
-Playwright starts a Django API on port 8191 and a Vite server on port 5191 with a temporary SQLite database. Keep those ports available. The browser flow covers registration, login, book creation, token rotation, rejection of the old refresh token, persistence after reload, and logout. Additional browser tests cover editing and cancelling changes, preserving reading status, failed mutations, retrying failed shelf loads, rate-limit messages, and local cleanup when server logout fails.
+The backend suite contains 49 tests. PostgreSQL row-lock and Redis integration tests require an isolated `DATABASE_URL` and `REDIS_URL`; SQLite runs skip those three checks. CI runs the complete backend suite on PostgreSQL/Redis across all supported Python versions. Browser tests use temporary databases/mailboxes and test the production build on desktop and mobile Chromium. Never point tests at a live database.
 
-GitHub Actions runs backend checks on Python 3.12, 3.13, and 3.14. On Node.js 22, 24, and 26 it verifies strict dependency installation, unit tests, the production build, npm audits, and browser integration with a real Django API. Both the root and frontend npm manifests are audited.
+The browser suite covers verified registration, password-reset emails, private cookies, refresh, CRUD, error retries, search/pagination, keyboard focus, responsive overflow and axe accessibility checks. Automated accessibility checks supplement manual testing; they do not establish complete WCAG conformance.
 
-## Deployment notes
+## API
 
-Production settings disable debug mode and enable HTTPS redirects, secure session/CSRF cookies, and one-year HSTS. Configure TLS, allowed hosts, frontend origins, and a trusted reverse proxy for your hosting environment. Only trust forwarded headers from a proxy you control.
+The browser and API share an origin through `/api/`. The standalone Django server exposes the same paths without that prefix.
 
-Provide a persistent signing key through your deployment's secret store. Never reuse the historical development key from repository history. If that key was used in a deployment, rotate it and invalidate existing sessions and JWTs.
+| Path | Purpose |
+| --- | --- |
+| `/api/auth/csrf/` | Get the CSRF token for unsafe browser requests |
+| `/api/auth/register/`, `/login/`, `/refresh/`, `/logout/` | Browser account/session lifecycle (all under `/api/auth/`) |
+| `/api/auth/me/` | Read/update the signed-in profile |
+| `/api/auth/password/…`, `/email/…`, `/sessions/revoke/`, `/account/` | Password, verification, session and deletion controls (under `/api/auth/`) |
+| `/api/books/` | Owner-scoped CRUD; `search`, `finished`, `year`, `ordering`, `page`, `page_size` |
+| `/api/books/summary/` | Total, finished and unfinished counts |
+| `/api/schema/`, `/api/docs/` | OpenAPI schema and self-hosted interactive documentation |
+| `/api/health/live/`, `/api/health/ready/` | Process and dependency health |
 
-SQLite databases are local data and are excluded from version control. Earlier repository history contains a development database; removing it from the current tree does not erase historical copies. If its accounts were used outside local testing, change the affected passwords and invalidate their sessions.
+List responses use `{count, next, previous, results}` with 12 items by default and a maximum of 100. Errors include `{error: {code, message, fields}, detail}`. Older bearer endpoints (`/token/`, `/token/refresh/`, `/logout/`, `/register/`) remain available for non-browser clients. See the committed [OpenAPI schema](docs/openapi.yaml) for exact request/response shapes.
 
-Back up existing databases and reconcile migration history before adopting the initial migrations. Do not blindly use `--fake` or overwrite existing data.
+## Deploy and operate
 
-Run the deployment check with your actual production environment:
+Production requires PostgreSQL, Redis, HTTPS, explicit allowed hosts, trusted CSRF origins and a configured SMTP sender. `deploy/compose.production.yaml` adds production settings; `deploy/compose.tls.yaml` optionally supplies Caddy TLS. A host/domain/SMTP provider has not been selected, so public DNS, certificate issuance and external email delivery are intentionally left for deployment validation.
 
-```bash
-python manage.py check --deploy
-```
+- [Environment and HTTPS configuration](docs/operations/environments.md)
+- [Migration, backup, restore and rollback](docs/operations/recovery.md)
+- [Health checks, logs and monitoring](docs/operations/observability.md)
+- [Architecture and design decisions](docs/ARCHITECTURE.md)
+- [All 20 improvement items and verification evidence](docs/PROFESSIONALIZATION.md)
 
-HSTS subdomain and preload warnings require deployment-specific decisions; only enable those settings when appropriate for your domain. Django's development server and the Vite development server are for local use.
+Existing email addresses require verification after upgrading. Take a backup before migrations. The recovery rehearsal restored one synthetic account and eight books into a new PostgreSQL database.
 
-## Repository structure
+## Security and contribution
 
-```text
-Django-React-Booktracker/
-├── accounts/          # Custom user model, registration, JWT endpoints, tests
-├── backend/           # Django settings and root URL configuration
-├── books/             # Book model, serializers, API, migrations, tests
-├── frontend/
-│   ├── src/           # React pages, components, authentication, API client
-│   ├── e2e/           # Playwright browser integration tests
-│   ├── vite.config.mjs # Vite, JSX transformation, and Vitest configuration
-│   └── package.json   # Frontend dependencies and scripts
-├── .github/           # CI workflows and contributor policies
-├── docs/demo/         # Recorded GIF and bookshelf screenshot
-├── SECURITY.md        # Security policy and private reporting instructions
-├── manage.py          # Django management entry point
-└── requirements.txt   # Backend dependencies
-```
+Read [SECURITY.md](SECURITY.md) to report vulnerabilities privately and [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the review workflow.
 
-## Contributing and license
-
-See the [contributing guide](.github/CONTRIBUTING.md) for development guidelines, the [security policy](SECURITY.md) for vulnerability reporting, and the [changelog](CHANGELOG.md) for project history.
-
-Licensed under the [Apache License 2.0](LICENSE.md).
+A historical SQLite file is absent from the current tree but remains in older commits and the `v0.1.0` tag. Its scope is documented in the [historical data assessment](docs/security/history-assessment.md). History was not rewritten and historical exposure is not represented as removed.
