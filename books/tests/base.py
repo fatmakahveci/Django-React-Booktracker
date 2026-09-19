@@ -1,6 +1,8 @@
 import logging
+
 from django.test import TestCase
 from rest_framework.test import APIClient
+
 from accounts.models import CustomUser
 
 
@@ -9,7 +11,7 @@ class BaseBookTest(TestCase):
         logger = logging.getLogger("django.request")
         logger.getEffectiveLevel()
         logger.setLevel(logging.ERROR)
-        
+
         self.user_name = "user"
         self.email = "user@email.com"
         self.password = "reactSifresi1."

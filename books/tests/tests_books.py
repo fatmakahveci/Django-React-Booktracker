@@ -1,6 +1,7 @@
+from rest_framework import status
+
 from books.models import Book
 from books.tests.base import BaseBookTest
-from rest_framework import status
 
 
 class BookAPITest(BaseBookTest):
@@ -36,7 +37,7 @@ class BookAPITest(BaseBookTest):
             },
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['user'], self.user.id)
+        self.assertEqual(response.data["user"], self.user.id)
 
     def test_save_books_with_missing_title(self):
         """
@@ -131,7 +132,7 @@ class BookAPITest(BaseBookTest):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         response = self.client.patch(
-            f"/books/1/",
+            f"/books/{response.data['id']}/",
             {"finished": False},
         )
         self.assertFalse(Book.objects.get(user=self.user).finished)
@@ -154,7 +155,7 @@ class BookAPITest(BaseBookTest):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         response = self.client.patch(
-            f"/books/1/",
+            f"/books/{response.data['id']}/",
             {"finished": True},
         )
         self.assertTrue(Book.objects.get(user=self.user).finished)
@@ -175,5 +176,5 @@ class BookAPITest(BaseBookTest):
             },
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response = self.client.delete("/books/1/")
+        response = self.client.delete(f"/books/{response.data['id']}/")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
