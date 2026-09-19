@@ -2,6 +2,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 
+from .authentication import locked_authenticated_user
 from .models import CustomUser
 from .validators import validate_user_name
 
@@ -24,6 +25,14 @@ class ProfileSerializer(serializers.ModelSerializer):
     def validate_user_name(self, value):
         validate_user_name(value)
         return value
+
+    def update(self, instance, validated_data):
+        with locked_authenticated_user(self.context["request"]) as user:
+            if "user_name" in validated_data:
+                user.user_name = validated_data["user_name"]
+                # Never write stale password, permission or revocation fields from the profile.
+                user.save(update_fields=["user_name"])
+            return user
 
 
 class EmailSerializer(serializers.Serializer):

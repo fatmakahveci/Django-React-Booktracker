@@ -44,6 +44,7 @@ export default defineConfig({
           "django.core.mail.backends.filebased.EmailBackend",
         DJANGO_EMAIL_FILE_PATH: process.env.E2E_MAIL_DIR,
         DJANGO_LOGIN_RATE: "1000/min",
+        DJANGO_REFRESH_RATE: "1000/min",
         DJANGO_REGISTRATION_RATE: "1000/hour",
         DJANGO_EMAIL_RATE: "1000/hour",
       },

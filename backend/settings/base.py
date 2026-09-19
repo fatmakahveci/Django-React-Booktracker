@@ -60,6 +60,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "accounts.middleware.AdminLoginThrottleMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -110,6 +111,7 @@ REST_FRAMEWORK = {
     "NUM_PROXIES": 0,
     "DEFAULT_THROTTLE_RATES": {
         "login": os.environ.get("DJANGO_LOGIN_RATE", "30/min"),
+        "refresh": os.environ.get("DJANGO_REFRESH_RATE", "60/min"),
         "registration": os.environ.get("DJANGO_REGISTRATION_RATE", "10/hour"),
         "email": os.environ.get("DJANGO_EMAIL_RATE", "5/hour"),
         "account": "30/hour",
@@ -126,6 +128,7 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "CHECK_REVOKE_TOKEN": True,
     "TOKEN_REFRESH_SERIALIZER": "accounts.serializers.RevocableTokenRefreshSerializer",
+    "TOKEN_BLACKLIST_SERIALIZER": "accounts.serializers.ExistingTokenBlacklistSerializer",
 }
 AUTH_USER_MODEL = "accounts.CustomUser"
 AUTHENTICATION_BACKENDS = ("django.contrib.auth.backends.ModelBackend",)
@@ -155,6 +158,7 @@ if redis_url := os.environ.get("REDIS_URL"):
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": redis_url,
             "KEY_PREFIX": "booktracker",
+            "OPTIONS": {"socket_connect_timeout": 2, "socket_timeout": 2},
         }
     }
 
