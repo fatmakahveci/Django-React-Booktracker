@@ -1,7 +1,7 @@
 {
-    email {$ACME_EMAIL}
+	email {$ACME_EMAIL}
 }
 {$SITE_ADDRESS} {
-    reverse_proxy web:80
-    # Do not enable request logging: verification/reset URLs contain credentials.
+	reverse_proxy web:80
+	# Do not enable request logging: verification/reset URLs contain credentials.
 }

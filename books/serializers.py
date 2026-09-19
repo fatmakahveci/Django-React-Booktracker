@@ -7,6 +7,8 @@ from books.models import Book
 
 
 class BookSerializer(serializers.ModelSerializer):
+    year = serializers.IntegerField(min_value=1, max_value=9999)
+    rating = serializers.IntegerField(min_value=1, max_value=5, allow_null=True, required=False)
     isbn = serializers.CharField(max_length=32, allow_blank=True, required=False)
 
     class Meta:
