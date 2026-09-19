@@ -12,7 +12,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -79,7 +79,8 @@ def send_link(user, generator, route, subject):
 def user_from_link(attrs, generator):
     try:
         uid = urlsafe_base64_decode(attrs["uid"]).decode()
-        user = CustomUser.objects.get(pk=uid, is_active=True)
+        # Call inside transaction.atomic(): concurrent requests must recheck the locked row.
+        user = CustomUser.objects.select_for_update().get(pk=uid, is_active=True)
     except (ValueError, TypeError, OverflowError, UnicodeDecodeError, CustomUser.DoesNotExist):
         raise ValidationError("The link is invalid or has expired.") from None
     if not generator.check_token(user, attrs["token"]):
@@ -114,8 +115,6 @@ class BrowserLoginView(PublicAction):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if settings.REQUIRE_EMAIL_VERIFICATION and not serializer.user.email_verified:
-            raise AuthenticationFailed("Verify your email before signing in.")
         return set_auth(
             Response({"user": ProfileSerializer(serializer.user).data}), serializer.validated_data
         )
@@ -236,10 +235,7 @@ class PasswordResetConfirmView(PublicAction):
         serializer.is_valid(raise_exception=True)
         attrs = serializer.validated_data
         with transaction.atomic():
-            candidate = user_from_link(attrs, default_token_generator)
-            user = CustomUser.objects.select_for_update().get(pk=candidate.pk)
-            if not default_token_generator.check_token(user, attrs["token"]):
-                raise ValidationError("The link is invalid or has expired.")
+            user = user_from_link(attrs, default_token_generator)
             user.set_password(check_password(attrs["password"], user))
             user.save(update_fields=["password"])
         return clear_auth(Response({"detail": "Password reset. Sign in with your new password."}))
@@ -252,9 +248,10 @@ class VerifyEmailView(PublicAction):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = user_from_link(serializer.validated_data, email_verification_token)
-        user.email_verified = True
-        user.save(update_fields=["email_verified"])
+        with transaction.atomic():
+            user = user_from_link(serializer.validated_data, email_verification_token)
+            user.email_verified = True
+            user.save(update_fields=["email_verified"])
         return Response({"detail": "Email verified. You can now sign in."})
 
 

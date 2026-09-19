@@ -5,14 +5,18 @@ from unittest import skipUnless
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
+from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.core.cache import cache
 from django.db import connection, connections
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from accounts.models import CustomUser
+from accounts.tokens import email_verification_token
 from books.models import Book
 
 
@@ -80,10 +84,26 @@ class BrowserAccountTests(TestCase):
         self.assertEqual(self.client.post("/auth/register/", data).status_code, 201)
         self.assertTrue(CustomUser.objects.filter(email="new@example.com").exists())
         self.assertIn(self.client.post("/auth/login/", data).status_code, (401, 403))
+        self.assertFalse(OutstandingToken.objects.filter(user__email="new@example.com").exists())
         link = self.link()
         self.assertEqual(self.client.post("/auth/email/verify/", link).status_code, 200)
         self.assertEqual(self.client.post("/auth/email/verify/", link).status_code, 400)
         self.assertEqual(self.client.post("/auth/login/", data).status_code, 200)
+
+    def test_registration_and_profile_use_the_same_username_rules(self):
+        self.login()
+        for user_name in ("abc", "invalid name", "reader@example.com", "a" * 25):
+            with self.subTest(user_name=user_name):
+                profile = self.client.patch("/auth/me/", {"user_name": user_name})
+                registration = self.client.post(
+                    "/auth/register/",
+                    {"email": "new@example.com", "user_name": user_name, "password": self.password},
+                )
+                for response in (profile, registration):
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("user_name", response.data["error"]["fields"])
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.user_name, "reader")
 
     def test_reset_is_generic_one_time_and_revokes_existing_session(self):
         self.login()
@@ -179,3 +199,29 @@ class RefreshConcurrencyTests(TransactionTestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:
             statuses = sorted(pool.map(refresh, range(2)))
         self.assertEqual(statuses, [200, 401])
+
+    def test_email_verification_link_is_consumed_once_under_concurrency(self):
+        self.assert_link_consumed_once(email_verification_token, "/auth/email/verify/")
+
+    def test_password_reset_link_is_consumed_once_under_concurrency(self):
+        self.assert_link_consumed_once(default_token_generator, "/auth/password/reset/confirm/")
+
+    def assert_link_consumed_once(self, generator, path):
+        user = CustomUser.objects.create_user(
+            "link@example.com", "link_reader", "Original-collection-password-71!"
+        )
+        body = {
+            "uid": urlsafe_base64_encode(force_bytes(user.pk)),
+            "token": generator.make_token(user),
+            "password": "Replacement-collection-password-28!",
+        }
+
+        def consume(_):
+            try:
+                return APIClient().post(path, body).status_code
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            statuses = sorted(pool.map(consume, range(2)))
+        self.assertEqual(statuses, [200, 400])

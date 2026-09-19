@@ -10,7 +10,10 @@ where applicable.
 
 ### Changed
 
-- Upgrade to React 19.3, Vite 8.3, Vitest 5, jsdom 30, Axios 1.20, and Playwright 1.63.
+- Upgrade to React 19.3, Vite 8.3, Vitest 5, jsdom 30, and Playwright 1.63.
+- Consolidate Django settings and use `local.sqlite3` as the default development database.
+- Calculate reading totals in one query and stream backup checksums with bounded memory.
+- Extend frontend lint and formatting checks to browser tests and development scripts.
 - Migrate JSX transformation and dependency optimization to Vite’s Oxc/Rolldown APIs.
 - Validate frontend compatibility on Node.js 22, 24, and 26 and declare supported runtime versions.
 
@@ -31,6 +34,14 @@ where applicable.
 - Added an initial changelog to track future project changes.
 
 ### Fixed
+
+- Use Django authentication forms for admin account creation, password changes and read-only password hashes.
+- Apply consistent username validation to registration, profile editing and admin forms.
+- Consume verification/reset links once under concurrent requests and avoid issuing tokens for unverified accounts.
+- Reject malformed ISBN digits without server errors and clear finish dates before validating a reopened book.
+- Recover unavailable library pages after edits and clear stale session errors after successful login.
+- Exclude local email files and database dumps from Docker images; isolate browser tests from inherited deployment settings.
+- Validate the public URL before stopping services during a release and bound the final health-check timeout.
 
 - Revoke access and refresh tokens after password changes and reject refresh attempts for deleted accounts.
 - Apply configured Django password validators during registration.

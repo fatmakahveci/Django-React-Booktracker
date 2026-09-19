@@ -94,7 +94,14 @@ export async function api<T>(
         throw refreshError;
       }
       if (endingSession) throw error;
-      return send<T>(path, method, body);
+      try {
+        return await send<T>(path, method, body);
+      } catch (retryError) {
+        // A revoked session can fail even if refresh completed just beforehand.
+        if (retryError instanceof ApiError && retryError.status === 401)
+          window.dispatchEvent(new Event("session-expired"));
+        throw retryError;
+      }
     }
     throw error;
   }
