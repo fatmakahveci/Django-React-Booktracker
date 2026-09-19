@@ -1,0 +1,22 @@
+# Use with compose.yaml behind a trusted TLS gateway.
+services:
+  api:
+    environment:
+      DJANGO_ENV: production
+      DJANGO_DEBUG: 'false'
+      DJANGO_PUBLIC_URL: ${DJANGO_PUBLIC_URL:?Set an HTTPS public URL}
+      DJANGO_EMAIL_HOST: ${DJANGO_EMAIL_HOST:?Set a real SMTP host}
+      DJANGO_EMAIL_PORT: ${DJANGO_EMAIL_PORT:-587}
+      DJANGO_EMAIL_USE_TLS: 'true'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/health/ready/',headers={'X-Forwarded-Proto':'https','Host':'localhost'}); urllib.request.urlopen(r)"]
+  web:
+    restart: unless-stopped
+    volumes: ["./deploy/proxy_params.production:/etc/nginx/proxy_params_booktracker:ro"]
+  postgres:
+    restart: unless-stopped
+  redis:
+    restart: unless-stopped
+  mailpit:
+    profiles: ["development-mail"]
