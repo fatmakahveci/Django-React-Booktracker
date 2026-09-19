@@ -19,6 +19,10 @@ where applicable.
 
 ### Added
 
+- Per-IP login and registration limits with Retry-After feedback.
+- Logout endpoint that blacklists the current refresh token; client waits for pending rotation and reports unconfirmed server logout.
+- Regression coverage for throttling, spoofed forwarding headers, logout revocation, and logout failure recovery.
+
 - Edit book titles, authors, and publication years from either reading shelf.
 - Show actionable book-operation errors and retry failed shelf loading.
 - Cover editing, cancellation, persistence, and failed operations with browser tests.

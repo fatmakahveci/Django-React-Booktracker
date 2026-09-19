@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from accounts.throttles import LoginThrottle, RegistrationThrottle
 from accounts.serializers import MyTokenObtainPairSerializer, RegistrationSerializer
 
 
@@ -14,6 +15,8 @@ from accounts.serializers import MyTokenObtainPairSerializer, RegistrationSerial
     ]
 )
 class RegistrationView(APIView):
+    throttle_classes = [RegistrationThrottle]
+
     def post(self, request):
         serializer = RegistrationSerializer(data=request.data)
         if serializer.is_valid():
@@ -24,4 +27,5 @@ class RegistrationView(APIView):
 
 
 class MyTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [LoginThrottle]
     serializer_class = MyTokenObtainPairSerializer
