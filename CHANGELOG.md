@@ -8,6 +8,14 @@ where applicable.
 
 ## [Unreleased]
 
+### Security
+
+- Revalidate account writes under a row lock to prevent stale requests from restoring revoked credentials or deleted accounts.
+- Serialize token issuance and rotation with account deletion; logout no longer recreates purged token records.
+- Enforce email verification for existing access and refresh tokens as well as new sign-ins.
+- Rate-limit admin sign-in and browser/bearer refresh requests, including fail-closed handling of Redis outages.
+- Reject development email backends in production to avoid exposing verification/reset links in logs or discarding mail.
+
 ### Changed
 
 - Upgrade to React 19.3, Vite 8.3, Vitest 5, jsdom 30, and Playwright 1.63.

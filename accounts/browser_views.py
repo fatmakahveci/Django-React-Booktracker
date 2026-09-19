@@ -18,7 +18,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from .account_serializers import (
     EmailSerializer,
@@ -29,14 +28,22 @@ from .account_serializers import (
     ResetPasswordSerializer,
     check_password,
 )
+from .authentication import locked_authenticated_user
 from .models import CustomUser
 from .schema import CSRFSerializer, DetailSerializer, EmptySerializer, LoginResponseSerializer
 from .serializers import (
+    ExistingTokenBlacklistSerializer,
     MyTokenObtainPairSerializer,
     RegistrationSerializer,
     RevocableTokenRefreshSerializer,
 )
-from .throttles import AccountThrottle, EmailThrottle, LoginThrottle, RegistrationThrottle
+from .throttles import (
+    AccountThrottle,
+    EmailThrottle,
+    LoginThrottle,
+    RefreshThrottle,
+    RegistrationThrottle,
+)
 from .tokens import email_verification_token
 
 
@@ -137,6 +144,8 @@ class BrowserRegisterView(PublicAction):
 
 @extend_schema(responses=DetailSerializer)
 class BrowserRefreshView(PublicAction):
+    throttle_classes = [RefreshThrottle]
+
     def post(self, request):
         serializer = RevocableTokenRefreshSerializer(
             data={"refresh": request.COOKIES.get("bt_refresh", "")}
@@ -153,7 +162,9 @@ class BrowserLogoutView(PublicAction):
     def post(self, request):
         if refresh := request.COOKIES.get("bt_refresh"):
             try:
-                RefreshToken(refresh).blacklist()
+                ExistingTokenBlacklistSerializer(data={"refresh": refresh}).is_valid(
+                    raise_exception=True
+                )
             except TokenError:
                 pass
         return clear_auth(Response(status=status.HTTP_204_NO_CONTENT))
@@ -172,10 +183,11 @@ class ChangePasswordView(GenericAPIView):
     serializer_class = PasswordChangeSerializer
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        request.user.set_password(serializer.validated_data["new_password"])
-        request.user.save(update_fields=["password"])
+        with locked_authenticated_user(request) as user:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user.set_password(serializer.validated_data["new_password"])
+            user.save(update_fields=["password"])
         return clear_auth(Response({"detail": "Password changed. Sign in again."}))
 
 
@@ -185,11 +197,10 @@ class LogoutAllView(GenericAPIView):
     serializer_class = PasswordConfirmationSerializer
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        CustomUser.objects.filter(pk=request.user.pk).update(
-            session_version=F("session_version") + 1
-        )
+        with locked_authenticated_user(request) as user:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            CustomUser.objects.filter(pk=user.pk).update(session_version=F("session_version") + 1)
         return clear_auth(Response({"detail": "All sessions revoked."}))
 
 
@@ -199,12 +210,12 @@ class DeleteAccountView(GenericAPIView):
     serializer_class = PasswordConfirmationSerializer
 
     def delete(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
+        with locked_authenticated_user(request) as user:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
             # Outstanding JWT records otherwise survive as SET_NULL and retain identity claims.
-            OutstandingToken.objects.filter(user=request.user).delete()
-            request.user.delete()
+            OutstandingToken.objects.filter(user=user).delete()
+            user.delete()
         return clear_auth(Response(status=status.HTTP_204_NO_CONTENT))
 
 

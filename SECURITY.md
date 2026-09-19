@@ -52,9 +52,10 @@ Use a local checkout, an isolated database, test accounts, and synthetic book re
 - Local SQLite databases must not be committed or included in source releases. Removing a database from the current tree does not remove it from Git history; treat any credentials previously included as exposed.
 - Back up databases before upgrades and review migration history before applying migrations.
 - The browser uses HttpOnly, SameSite=Lax cookies, with Secure required outside debug. Unsafe requests require CSRF, including login/refresh/logout. Tokens are never written to local or session storage. Ordinary logout revokes refresh and clears cookies; copied access tokens can remain valid for up to five minutes. Failed server logout is surfaced in the UI and can be retried.
-- Password changes and all-session revocation invalidate access and refresh tokens. Account deletion cascades to its private books. Sensitive account changes require the current password.
-- Email verification is required. Reset and verification links are single-use and expire after one hour. Existing addresses require verification after upgrading.
-- Production requires Redis for atomic per-IP authentication limits across workers. Redis failures fail closed. Only explicitly trusted gateways can set the original client address. Additional gateway limits complement application controls.
+- Password changes and all-session revocation invalidate access and refresh tokens. Account writes recheck authentication while holding a user-row lock; profile edits only update the username. Account deletion purges its books and token records, and subsequent logout/refresh requests cannot recreate those records. Sensitive account changes require the current password.
+- Email verification is required and checked on existing access and refresh tokens. Reset and verification links are single-use and expire after one hour. Existing addresses require verification after upgrading.
+- Production requires Redis for atomic per-IP authentication limits across workers, including Django admin login and token refresh. Redis failures fail closed. Only explicitly trusted gateways can set the original client address. Additional gateway limits complement application controls.
+- Configure a real production email backend. Console, file, in-memory and dummy backends are rejected in production so verification/reset links cannot be accidentally logged or discarded.
 - Refresh tokens rotate after successful refresh, and old refresh tokens are blacklisted. Custom clients must retain the newly returned token pair.
 - Install frontend dependencies from the committed lockfile with `npm ci`, review dependency alerts, and run the documented checks after upgrading.
 
