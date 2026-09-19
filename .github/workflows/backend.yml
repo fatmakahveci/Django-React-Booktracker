@@ -49,5 +49,6 @@ jobs:
           DJANGO_DEBUG: 'false'
           DJANGO_PUBLIC_URL: https://example.com
           DJANGO_ALLOWED_HOSTS: example.com
+          DJANGO_EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
           DJANGO_HSTS_INCLUDE_SUBDOMAINS: 'true'
           DJANGO_HSTS_PRELOAD: 'true'
