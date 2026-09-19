@@ -254,7 +254,7 @@ const Register = () => {
             Submit
           </button>
           <div>
-            <p className={!showMessage ? "offscreen" : "text-danger"}>
+            <p role={showMessage ? "alert" : undefined} className={!showMessage ? "offscreen" : "text-danger"}>
               {message}
             </p>
           </div>
