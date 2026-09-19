@@ -17,6 +17,7 @@ from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .account_serializers import (
@@ -201,7 +202,10 @@ class DeleteAccountView(GenericAPIView):
     def delete(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        request.user.delete()
+        with transaction.atomic():
+            # Outstanding JWT records otherwise survive as SET_NULL and retain identity claims.
+            OutstandingToken.objects.filter(user=request.user).delete()
+            request.user.delete()
         return clear_auth(Response(status=status.HTTP_204_NO_CONTENT))
 
 
